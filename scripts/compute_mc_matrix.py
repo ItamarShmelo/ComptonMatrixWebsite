@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 """
-Compute one Monte Carlo realization of the multigroup Compton matrix (angle-integrated).
+Compute one Monte Carlo realization of the multigroup Compton matrix (angle-resolved).
 
-Headless, SLURM-friendly script. Computes the full 128x128 sigma and dsigma/dT
-matrices on a 128-group geometric energy grid via MC sampling.
+Headless, SLURM-friendly script. Computes the full 128x128x100 sigma and dsigma/dT
+matrices on a 128-group geometric energy grid with 100 angle bins via MC sampling.
 
 Usage:
   python scripts/compute_mc_matrix.py --temperature-index 0 --seed 0
@@ -23,6 +23,7 @@ from compton_matrix import kev
 ROOT = Path(__file__).resolve().parent.parent
 
 N_GROUPS = 128
+N_ANGLE_BINS = 100
 E_MIN_KEV = 1e-5  # 0.01 eV
 E_MAX_KEV = 300.0
 
@@ -68,16 +69,16 @@ def main() -> None:
         ),
     )
 
-    print(f"[T-index {tidx:03d}, seed {seed}] Computing MC {N_GROUPS}x{N_GROUPS} matrix "
+    print(f"[T-index {tidx:03d}, seed {seed}] Computing MC {N_GROUPS}x{N_GROUPS}x{N_ANGLE_BINS} matrix "
           f"at T = {T:.6e} K ...")
 
     t0 = time.time()
-    sigma_matrix = np.asarray(mc.compute_sigma_matrix(T=T, Ne=1.0))
+    sigma_matrix = np.asarray(mc.compute_sigma_matrix(N_ANGLE_BINS, T=T, Ne=1.0))
     elapsed_sigma = time.time() - t0
     print(f"  sigma_matrix done ({elapsed_sigma:.1f}s)")
 
     t0 = time.time()
-    dsigma_dT_matrix = np.asarray(mc.compute_dsigma_dT_matrix(T=T, Ne=1.0))
+    dsigma_dT_matrix = np.asarray(mc.compute_dsigma_dT_matrix(N_ANGLE_BINS, T=T, Ne=1.0))
     elapsed_deriv = time.time() - t0
     print(f"  dsigma_dT_matrix done ({elapsed_deriv:.1f}s)")
 

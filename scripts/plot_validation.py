@@ -29,7 +29,7 @@ N_GROUPS = 128
 N_SEEDS = 10
 N_TEMPS = 64
 
-DET_DIR = ROOT / "output" / "tables"
+DET_DIR = ROOT / "docs" / "data"
 MC_DIR = ROOT / "output" / "mc_tables"
 PLOT_DIR = ROOT / "output" / "plots"
 
@@ -40,13 +40,18 @@ BOUNDARIES_KEV = np.geomspace(E_MIN_KEV, E_MAX_KEV, N_GROUPS + 1)
 GROUP_CENTERS_KEV = np.sqrt(BOUNDARIES_KEV[:-1] * BOUNDARIES_KEV[1:])
 
 
+def _sum_angles(arr):
+    """Sum over angle axis if array is 3D (G, G, N_angles) -> (G, G)."""
+    return arr.sum(axis=-1) if arr.ndim == 3 else arr
+
+
 def load_data(tidx: int):
     det_path = sorted(DET_DIR.glob(f"T{tidx:03d}_*.npz"))[0]
     det_data = np.load(det_path)
-    det_sigma = det_data["sigma_matrix"]
+    det_sigma = _sum_angles(det_data["sigma_matrix"])
 
     mc_stack = np.array([
-        np.load(MC_DIR / f"mc_T{tidx:03d}_seed{s}.npz")["sigma_matrix"]
+        _sum_angles(np.load(MC_DIR / f"mc_T{tidx:03d}_seed{s}.npz")["sigma_matrix"])
         for s in range(N_SEEDS)
     ])
     mc_mean = mc_stack.mean(axis=0)

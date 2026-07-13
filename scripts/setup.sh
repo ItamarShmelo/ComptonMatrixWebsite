@@ -19,7 +19,7 @@ uv sync
 uv pip install -e .
 
 echo "Creating output directories ..."
-mkdir -p "$REPO_ROOT/output/tables"
+mkdir -p "$REPO_ROOT/docs/data"
 mkdir -p "$REPO_ROOT/output/mc_tables"
 mkdir -p "$REPO_ROOT/logs"
 
