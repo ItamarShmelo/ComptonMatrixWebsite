@@ -1,0 +1,8 @@
+external/
+output/mc_tables/
+output/plots/
+logs/
+__pycache__/
+*.pyc
+.venv/
+build/
