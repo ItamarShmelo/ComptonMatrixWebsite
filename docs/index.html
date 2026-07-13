@@ -1,0 +1,196 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Compton Scattering Matrix Database</title>
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+
+<!-- ── Header ──────────────────────────────────────────── -->
+<header class="site-header">
+  <h1>Compton Scattering Matrix Database</h1>
+  <p>Multigroup angle-resolved Compton scattering cross sections for radiation transport calculations</p>
+</header>
+
+<!-- ── Pyodide loading banner ──────────────────────────── -->
+<div id="loading-banner" class="loading-banner">
+  Loading Python runtime&hellip;
+</div>
+
+<div class="container">
+
+  <!-- ── About ───────────────────────────────────────── -->
+  <section class="card" id="about-card">
+    <div class="card-title collapsible" onclick="toggleCard('about-card')">
+      About This Database
+      <span class="toggle-icon">&#9660;</span>
+    </div>
+    <div class="card-body">
+      <hr>
+      <div class="about-text">
+        <p>
+          Pre-computed multigroup, angle-binned Compton scattering cross sections
+          evaluated using the Kershaw&ndash;Prasad&ndash;Beason (1986) thermal
+          Compton kernel via the
+          <a href="https://github.com/ItamarShmelo/ComptonMatrixExact" target="_blank" rel="noopener">ComptonMatrixExact</a>
+          deterministic solver with uniform energy weighting.
+        </p>
+        <p>
+          Select a temperature and specify the desired coarse energy and angle grids
+          below. The browser will collapse the fine-grid data and produce a
+          downloadable <code>.npy</code> file.
+        </p>
+        <div class="grid-summary" id="grid-summary">
+          Loading grid information&hellip;
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ── Temperature ─────────────────────────────────── -->
+  <section class="card">
+    <div class="card-title">Temperature</div>
+    <hr>
+    <label for="temperature-select">Select temperature:</label>
+    <select id="temperature-select" disabled>
+      <option value="">Loading&hellip;</option>
+    </select>
+  </section>
+
+  <!-- ── Energy group grid ───────────────────────────── -->
+  <section class="card">
+    <div class="card-title">Energy Group Grid</div>
+    <hr>
+    <label for="n-groups">Number of output groups:</label>
+    <input type="number" id="n-groups" min="1" max="128" value="128">
+    <div class="hint" id="n-groups-hint"></div>
+
+    <div id="boundaries-auto">
+      <label style="margin-top:1rem;">Coarse boundaries (keV):</label>
+      <div class="boundaries-display" id="boundaries-display">
+        Loading&hellip;
+      </div>
+    </div>
+
+    <label class="checkbox-row" id="custom-boundaries-toggle">
+      <input type="checkbox" id="use-custom-boundaries">
+      Use custom boundaries instead
+    </label>
+
+    <div id="boundaries-custom" style="display:none; margin-top:0.75rem;">
+      <label for="custom-boundaries-input">Enter boundary values in keV (space-separated):</label>
+      <textarea id="custom-boundaries-input" rows="3"
+                placeholder="e.g. 1e-5 0.001 0.1 10 300"></textarea>
+      <div class="hint" id="custom-boundaries-error"></div>
+    </div>
+  </section>
+
+  <!-- ── Angle grid ──────────────────────────────────── -->
+  <section class="card">
+    <div class="card-title">Scattering Angle Grid</div>
+    <hr>
+    <label for="n-angles">Number of output angle bins:</label>
+    <input type="number" id="n-angles" min="1" max="100" value="100">
+    <div class="hint" id="n-angles-hint"></div>
+    <div class="hint" id="angle-info"></div>
+  </section>
+
+  <!-- ── Output summary & download ───────────────────── -->
+  <section class="card">
+    <div class="card-title">Output Summary</div>
+    <hr>
+    <dl class="summary-grid">
+      <dt>Output matrix shape:</dt>
+      <dd id="summary-shape">128 &times; 128 &times; 100</dd>
+      <dt>Axes:</dt>
+      <dd>[incoming group] &times; [outgoing group] &times; [angle bin]</dd>
+      <dt>Weight function:</dt>
+      <dd>Uniform</dd>
+      <dt>Estimated file size:</dt>
+      <dd id="summary-size">&mdash;</dd>
+    </dl>
+    <button class="btn-download" id="btn-download" disabled>
+      Compute &amp; Download (.npy)
+    </button>
+    <div class="progress-container" id="progress-container">
+      <div class="progress-bar-bg">
+        <div class="progress-bar-fill" id="progress-bar"></div>
+      </div>
+      <div class="progress-label" id="progress-label">Initializing&hellip;</div>
+    </div>
+  </section>
+
+  <!-- ── What is .npy ────────────────────────────────── -->
+  <section class="card" id="npy-card">
+    <div class="card-title collapsible collapsed" onclick="toggleCard('npy-card')">
+      What is .npy?
+      <span class="toggle-icon">&#9660;</span>
+    </div>
+    <div class="card-body collapsed">
+      <hr>
+      <div class="info-text">
+        <p>
+          <code>.npy</code> is NumPy's native single-array binary format.
+          It stores the array data type, shape, and raw data in a compact
+          binary file with a short ASCII header. It is the most efficient
+          way to save and load numerical arrays in Python.
+        </p>
+        <p>Load in Python:</p>
+        <div class="code-block">
+import numpy as np<br>
+sigma = np.load("compton_sigma_T053_16g_10a.npy")<br>
+print(sigma.shape)&nbsp;&nbsp; # (16, 16, 10)<br>
+# sigma[g_in, g_out, angle_bin]
+        </div>
+        <p>Array axes:</p>
+        <ul class="axis-list">
+          <li><strong>Axis 0</strong> &mdash; Incoming photon energy group</li>
+          <li><strong>Axis 1</strong> &mdash; Outgoing photon energy group</li>
+          <li><strong>Axis 2</strong> &mdash; Scattering angle bin (&xi; = cos &theta;)</li>
+        </ul>
+      </div>
+    </div>
+  </section>
+
+  <!-- ── The multigroup formula ──────────────────────── -->
+  <section class="card" id="formula-card">
+    <div class="card-title collapsible collapsed" onclick="toggleCard('formula-card')">
+      The Multigroup Formula
+      <span class="toggle-icon">&#9660;</span>
+    </div>
+    <div class="card-body collapsed">
+      <hr>
+      <div class="info-text">
+        <p>
+          The multigroup, angle-binned scattering cross section is defined as:
+        </p>
+        <div class="formula-block">
+          &sigma;(g&rarr;g', [&xi;<sub>i</sub>,&xi;<sub>i+1</sub>]; T)
+          =
+          2&pi; &int; w(E)&middot;&Sigma;<sub>E</sub>(E,E',&xi;) d&xi; dE' dE
+          &frasl;
+          &int; w(E) dE
+        </div>
+        <p>
+          With uniform weight <em>w</em>(E) = 1. Collapsing to coarser groups
+          uses the same weight: incoming groups are width-averaged
+          (<em>w<sub>g</sub></em> = E<sub>g+1</sub> &minus; E<sub>g</sub>),
+          outgoing groups and angle bins are summed.
+        </p>
+      </div>
+    </div>
+  </section>
+
+</div><!-- .container -->
+
+<!-- ── Footer ──────────────────────────────────────────── -->
+<footer class="site-footer">
+  Data generated with
+  <a href="https://github.com/ItamarShmelo/ComptonMatrixExact" target="_blank" rel="noopener">ComptonMatrixExact</a>
+</footer>
+
+<script src="js/app.js"></script>
+</body>
+</html>

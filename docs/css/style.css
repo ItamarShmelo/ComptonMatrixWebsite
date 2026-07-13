@@ -1,0 +1,442 @@
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+:root {
+  --navy-dark: #0f172a;
+  --navy-mid: #1e3a5f;
+  --accent: #3b82f6;
+  --accent-hover: #2563eb;
+  --bg: #f8fafc;
+  --card: #ffffff;
+  --text: #1e293b;
+  --text-secondary: #64748b;
+  --border: #e2e8f0;
+  --code-bg: #f1f5f9;
+  --green: #059669;
+  --green-hover: #047857;
+  --red: #dc2626;
+  --shadow: 0 1px 3px rgba(0, 0, 0, 0.1), 0 1px 2px rgba(0, 0, 0, 0.06);
+  --shadow-md: 0 4px 6px rgba(0, 0, 0, 0.07), 0 2px 4px rgba(0, 0, 0, 0.06);
+  --radius: 8px;
+  --font: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Oxygen,
+    Ubuntu, Cantarell, sans-serif;
+  --mono: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace;
+}
+
+html {
+  font-size: 16px;
+  scroll-behavior: smooth;
+}
+
+body {
+  font-family: var(--font);
+  color: var(--text);
+  background: var(--bg);
+  line-height: 1.6;
+  min-height: 100vh;
+}
+
+/* ── Header ────────────────────────────────────────────── */
+
+.site-header {
+  background: linear-gradient(135deg, var(--navy-dark) 0%, var(--navy-mid) 100%);
+  color: #fff;
+  padding: 2.5rem 1.5rem;
+  text-align: center;
+}
+
+.site-header h1 {
+  font-size: 1.75rem;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  margin-bottom: 0.5rem;
+}
+
+.site-header p {
+  font-size: 1rem;
+  opacity: 0.85;
+  max-width: 600px;
+  margin: 0 auto;
+}
+
+/* ── Pyodide loading banner ────────────────────────────── */
+
+.loading-banner {
+  background: var(--accent);
+  color: #fff;
+  text-align: center;
+  padding: 0.5rem 1rem;
+  font-size: 0.875rem;
+  transition: opacity 0.4s, max-height 0.4s;
+  max-height: 50px;
+  overflow: hidden;
+}
+
+.loading-banner.hidden {
+  opacity: 0;
+  max-height: 0;
+  padding: 0;
+}
+
+/* ── Container ─────────────────────────────────────────── */
+
+.container {
+  max-width: 860px;
+  margin: 0 auto;
+  padding: 1.5rem 1rem 3rem;
+}
+
+/* ── Cards ─────────────────────────────────────────────── */
+
+.card {
+  background: var(--card);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+  padding: 1.5rem 2rem;
+  margin-bottom: 1.25rem;
+}
+
+.card-title {
+  font-size: 0.8rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text-secondary);
+  margin-bottom: 1rem;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  cursor: default;
+}
+
+.card-title.collapsible {
+  cursor: pointer;
+  user-select: none;
+}
+
+.card-title.collapsible:hover {
+  color: var(--accent);
+}
+
+.card-title .toggle-icon {
+  font-size: 0.75rem;
+  transition: transform 0.25s;
+}
+
+.card-title.collapsible.collapsed .toggle-icon {
+  transform: rotate(-90deg);
+}
+
+.card-body {
+  overflow: hidden;
+  transition: max-height 0.35s ease, opacity 0.25s;
+}
+
+.card-body.collapsed {
+  max-height: 0 !important;
+  opacity: 0;
+  padding-top: 0;
+}
+
+.card hr {
+  border: none;
+  border-top: 1px solid var(--border);
+  margin: 0 0 1rem;
+}
+
+/* ── About text ────────────────────────────────────────── */
+
+.about-text {
+  font-size: 0.95rem;
+  color: var(--text);
+  line-height: 1.7;
+}
+
+.about-text a {
+  color: var(--accent);
+  text-decoration: none;
+}
+
+.about-text a:hover {
+  text-decoration: underline;
+}
+
+.grid-summary {
+  margin-top: 0.75rem;
+  padding: 0.75rem 1rem;
+  background: var(--code-bg);
+  border-radius: 6px;
+  font-family: var(--mono);
+  font-size: 0.85rem;
+  line-height: 1.8;
+  color: var(--text-secondary);
+}
+
+/* ── Form controls ─────────────────────────────────────── */
+
+label {
+  display: block;
+  font-size: 0.9rem;
+  font-weight: 500;
+  margin-bottom: 0.35rem;
+  color: var(--text);
+}
+
+select,
+input[type="number"],
+input[type="text"],
+textarea {
+  font-family: var(--mono);
+  font-size: 0.9rem;
+  padding: 0.5rem 0.75rem;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--card);
+  color: var(--text);
+  transition: border-color 0.15s, box-shadow 0.15s;
+  height: 40px;
+}
+
+select {
+  width: 100%;
+  appearance: auto;
+}
+
+input[type="number"] {
+  width: 120px;
+}
+
+select:focus,
+input:focus,
+textarea:focus {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.15);
+}
+
+textarea {
+  width: 100%;
+  height: auto;
+  min-height: 60px;
+  resize: vertical;
+  font-size: 0.8rem;
+  line-height: 1.5;
+}
+
+.hint {
+  font-size: 0.8rem;
+  color: var(--text-secondary);
+  margin-top: 0.3rem;
+}
+
+.hint.error {
+  color: var(--red);
+  font-weight: 500;
+}
+
+.boundaries-display {
+  margin-top: 0.5rem;
+  padding: 0.6rem 0.75rem;
+  background: var(--code-bg);
+  border-radius: 6px;
+  font-family: var(--mono);
+  font-size: 0.78rem;
+  color: var(--text-secondary);
+  word-break: break-all;
+  line-height: 1.6;
+  max-height: 120px;
+  overflow-y: auto;
+}
+
+.checkbox-row {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-top: 0.75rem;
+  font-size: 0.9rem;
+  cursor: pointer;
+}
+
+.checkbox-row input[type="checkbox"] {
+  width: 16px;
+  height: 16px;
+  accent-color: var(--accent);
+}
+
+/* ── Output summary ────────────────────────────────────── */
+
+.summary-grid {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 0.25rem 1rem;
+  font-size: 0.9rem;
+  margin-bottom: 1.25rem;
+}
+
+.summary-grid dt {
+  color: var(--text-secondary);
+  font-weight: 500;
+}
+
+.summary-grid dd {
+  font-family: var(--mono);
+  font-weight: 600;
+}
+
+/* ── Buttons ───────────────────────────────────────────── */
+
+.btn-download {
+  display: block;
+  width: 100%;
+  padding: 0.9rem 1.5rem;
+  font-size: 1.05rem;
+  font-weight: 700;
+  color: #fff;
+  background: var(--green);
+  border: none;
+  border-radius: var(--radius);
+  cursor: pointer;
+  transition: background 0.15s, box-shadow 0.15s, opacity 0.15s;
+  letter-spacing: 0.02em;
+}
+
+.btn-download:hover:not(:disabled) {
+  background: var(--green-hover);
+  box-shadow: var(--shadow-md);
+}
+
+.btn-download:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* ── Progress bar ──────────────────────────────────────── */
+
+.progress-container {
+  margin-top: 1rem;
+  display: none;
+}
+
+.progress-container.visible {
+  display: block;
+}
+
+.progress-bar-bg {
+  width: 100%;
+  height: 8px;
+  background: var(--border);
+  border-radius: 4px;
+  overflow: hidden;
+}
+
+.progress-bar-fill {
+  height: 100%;
+  background: var(--accent);
+  border-radius: 4px;
+  transition: width 0.3s ease;
+  width: 0%;
+}
+
+.progress-label {
+  font-size: 0.8rem;
+  color: var(--text-secondary);
+  margin-top: 0.35rem;
+  text-align: center;
+}
+
+/* ── Info sections (npy, formula) ──────────────────────── */
+
+.info-text {
+  font-size: 0.92rem;
+  line-height: 1.7;
+}
+
+.info-text p {
+  margin-bottom: 0.75rem;
+}
+
+.code-block {
+  background: var(--code-bg);
+  border-radius: 6px;
+  padding: 0.75rem 1rem;
+  font-family: var(--mono);
+  font-size: 0.82rem;
+  line-height: 1.7;
+  overflow-x: auto;
+  margin: 0.75rem 0;
+  border: 1px solid var(--border);
+}
+
+.formula-block {
+  background: var(--code-bg);
+  border-radius: 6px;
+  padding: 1rem 1.25rem;
+  font-family: var(--mono);
+  font-size: 0.85rem;
+  line-height: 2;
+  text-align: center;
+  margin: 0.75rem 0;
+  overflow-x: auto;
+}
+
+.axis-list {
+  list-style: none;
+  padding: 0;
+  margin: 0.5rem 0;
+}
+
+.axis-list li {
+  padding: 0.2rem 0;
+  font-size: 0.9rem;
+}
+
+.axis-list li::before {
+  content: "\2192";
+  margin-right: 0.5rem;
+  color: var(--accent);
+}
+
+/* ── Footer ────────────────────────────────────────────── */
+
+.site-footer {
+  text-align: center;
+  padding: 1.5rem 1rem;
+  font-size: 0.82rem;
+  color: var(--text-secondary);
+  border-top: 1px solid var(--border);
+  margin-top: 1rem;
+}
+
+.site-footer a {
+  color: var(--accent);
+  text-decoration: none;
+}
+
+.site-footer a:hover {
+  text-decoration: underline;
+}
+
+/* ── Responsive ────────────────────────────────────────── */
+
+@media (max-width: 640px) {
+  .site-header h1 {
+    font-size: 1.35rem;
+  }
+
+  .card {
+    padding: 1.25rem 1.25rem;
+  }
+
+  .summary-grid {
+    grid-template-columns: 1fr;
+  }
+
+  input[type="number"] {
+    width: 100%;
+  }
+}

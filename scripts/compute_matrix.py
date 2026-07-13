@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 """
-Compute the deterministic multigroup Compton scattering matrix (angle-integrated).
+Compute the deterministic multigroup Compton scattering matrix (angle-resolved).
 
-Headless, SLURM-friendly script. Computes the full 128x128 sigma and dsigma/dT
-matrices on a 128-group geometric energy grid.
+Headless, SLURM-friendly script. Computes the full 128x128x100 sigma and dsigma/dT
+matrices on a 128-group geometric energy grid with 100 angle bins.
 
 Usage:
   python scripts/compute_matrix.py --temperature-index 0
@@ -24,6 +24,7 @@ from compton_matrix import kev
 ROOT = Path(__file__).resolve().parent.parent
 
 N_GROUPS = 128
+N_ANGLE_BINS = 100
 E_MIN_KEV = 1e-5  # 0.01 eV
 E_MAX_KEV = 300.0
 
@@ -33,7 +34,7 @@ T_MAX_K = 1e9
 
 TEMPERATURES_K = np.geomspace(T_MIN_K, T_MAX_K, N_TEMPS)
 
-CACHE_DIR = ROOT / "output" / "tables"
+CACHE_DIR = ROOT / "docs" / "data"
 
 
 def parse_args() -> argparse.Namespace:
@@ -77,18 +78,18 @@ def main() -> None:
     kernel = cds.ComptonKernelSolver()
 
     quad_label = f", quadrature x{qscale}" if qscale > 1 else ""
-    print(f"[T-index {tidx:03d}] Computing deterministic {N_GROUPS}x{N_GROUPS} matrix "
+    print(f"[T-index {tidx:03d}] Computing deterministic {N_GROUPS}x{N_GROUPS}x{N_ANGLE_BINS} matrix "
           f"at T = {T:.6e} K{quad_label} ...")
 
     t0 = time.time()
     sigma_matrix = np.asarray(
-        mg.compute_sigma_matrix(kernel, T=T, Ne=1.0))
+        mg.compute_sigma_matrix(kernel, N_ANGLE_BINS, T=T, Ne=1.0))
     elapsed_sigma = time.time() - t0
     print(f"  sigma_matrix done ({elapsed_sigma:.1f}s)")
 
     t0 = time.time()
     dsigma_dT_matrix = np.asarray(
-        mg.compute_dsigma_dT_matrix(kernel, T=T, Ne=1.0))
+        mg.compute_dsigma_dT_matrix(kernel, N_ANGLE_BINS, T=T, Ne=1.0))
     elapsed_deriv = time.time() - t0
     print(f"  dsigma_dT_matrix done ({elapsed_deriv:.1f}s)")
 

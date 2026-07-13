@@ -23,7 +23,7 @@ ROOT = Path(__file__).resolve().parent.parent
 N_TEMPS = 64
 N_SEEDS = 10
 
-DET_DIR = ROOT / "output" / "tables"
+DET_DIR = ROOT / "docs" / "data"
 MC_DIR = ROOT / "output" / "mc_tables"
 
 
@@ -35,10 +35,15 @@ def find_det_file(tidx: int) -> Path:
     return matches[0]
 
 
+def _sum_angles(arr):
+    """Sum over angle axis if array is 3D (G, G, N_angles) -> (G, G)."""
+    return arr.sum(axis=-1) if arr.ndim == 3 else arr
+
+
 def validate_temperature(tidx: int) -> dict:
     det_path = find_det_file(tidx)
     det_data = np.load(det_path)
-    det_sigma = det_data["sigma_matrix"]
+    det_sigma = _sum_angles(det_data["sigma_matrix"])
     T = float(det_data["temperature_K"])
 
     mc_sigmas = []
@@ -46,7 +51,7 @@ def validate_temperature(tidx: int) -> dict:
         mc_path = MC_DIR / f"mc_T{tidx:03d}_seed{seed}.npz"
         if not mc_path.exists():
             raise FileNotFoundError(f"Missing MC file: {mc_path}")
-        mc_sigmas.append(np.load(mc_path)["sigma_matrix"])
+        mc_sigmas.append(_sum_angles(np.load(mc_path)["sigma_matrix"]))
 
     mc_stack = np.array(mc_sigmas)  # (N_SEEDS, G, G)
     mc_mean = mc_stack.mean(axis=0)
