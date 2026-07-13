@@ -71,7 +71,7 @@ def main() -> None:
 
     mg = cm.ComptonMultigroupKernel(
         energy_group_boundaries=boundaries_erg.tolist(),
-        weight_function=cm.PlanckWeightFunction(cap_x=300.0),
+        weight_function=cm.UniformWeightFunction(),
         config=cm.MGIntegrationConfig(**config_kwargs),
     )
     kernel = cds.ComptonKernelSolver()

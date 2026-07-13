@@ -60,7 +60,7 @@ def main() -> None:
 
     mc = cm.ComptonMonteCarloKernel(
         energy_group_boundaries=boundaries_erg.tolist(),
-        weight_function=cm.PlanckWeightFunction(cap_x=300.0),
+        weight_function=cm.UniformWeightFunction(),
         config=cm.MCIntegrationConfig(
             num_samples=10_000_000,
             seed=seed,
