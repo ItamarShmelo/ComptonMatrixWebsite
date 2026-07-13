@@ -76,22 +76,34 @@ def plot_temperature(tidx: int, det_sigma, mc_mean, mc_std, mc_sem):
     extent = [np.log10(E_MIN_KEV), np.log10(E_MAX_KEV),
               np.log10(E_MAX_KEV), np.log10(E_MIN_KEV)]
 
-    def _log_heatmap(ax, data, title):
+    det_abs = np.abs(det_sigma)
+    mc_abs = np.abs(mc_mean)
+    all_pos = np.concatenate([det_abs[det_abs > 0], mc_abs[mc_abs > 0]])
+    if len(all_pos) > 0:
+        shared_vmin = np.log10(all_pos.min())
+        shared_vmax = np.log10(all_pos.max())
+    else:
+        shared_vmin, shared_vmax = None, None
+
+    def _log_heatmap(ax, data, title, vmin=None, vmax=None):
         log_data = np.full_like(data, np.nan)
         pos = data > 0
         if pos.any():
             log_data[pos] = np.log10(data[pos])
-        im = ax.imshow(log_data, extent=extent, aspect="equal", cmap="viridis")
+        im = ax.imshow(log_data, extent=extent, aspect="equal", cmap="viridis",
+                       vmin=vmin, vmax=vmax)
         ax.set_title(title)
         ax.set_xlabel("log10(E' / keV)")
         ax.set_ylabel("log10(E / keV)")
         fig.colorbar(im, ax=ax, shrink=0.8, label="log10(|sigma|)")
 
     # --- (0,0) Deterministic sigma heatmap ---
-    _log_heatmap(axes[0, 0], np.abs(det_sigma), "Deterministic |sigma|")
+    _log_heatmap(axes[0, 0], det_abs, "Deterministic |sigma|",
+                 vmin=shared_vmin, vmax=shared_vmax)
 
     # --- (0,1) MC mean sigma heatmap ---
-    _log_heatmap(axes[0, 1], np.abs(mc_mean), "MC mean |sigma|")
+    _log_heatmap(axes[0, 1], mc_abs, "MC mean |sigma|",
+                 vmin=shared_vmin, vmax=shared_vmax)
 
     # --- (0,2) Deviation in SEM units ---
     ax = axes[0, 2]
