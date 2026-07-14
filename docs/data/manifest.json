@@ -138,6 +138,111 @@
   "weight_function": "uniform",
   "temperatures": [
     {
+      "index": 0,
+      "temperature_K": 1000.0,
+      "file": "T000_1.000000e+03K.npz"
+    },
+    {
+      "index": 1,
+      "temperature_K": 1245.197084735033,
+      "file": "T001_1.245197e+03K.npz"
+    },
+    {
+      "index": 2,
+      "temperature_K": 1550.5157798326254,
+      "file": "T002_1.550516e+03K.npz"
+    },
+    {
+      "index": 3,
+      "temperature_K": 1930.6977288832495,
+      "file": "T003_1.930698e+03K.npz"
+    },
+    {
+      "index": 4,
+      "temperature_K": 2404.0991835099717,
+      "file": "T004_2.404099e+03K.npz"
+    },
+    {
+      "index": 5,
+      "temperature_K": 2993.5772947204905,
+      "file": "T005_2.993577e+03K.npz"
+    },
+    {
+      "index": 6,
+      "temperature_K": 3727.593720314938,
+      "file": "T006_3.727594e+03K.npz"
+    },
+    {
+      "index": 7,
+      "temperature_K": 4641.588833612777,
+      "file": "T007_4.641589e+03K.npz"
+    },
+    {
+      "index": 8,
+      "temperature_K": 5779.692884153313,
+      "file": "T008_5.779693e+03K.npz"
+    },
+    {
+      "index": 9,
+      "temperature_K": 7196.856730011521,
+      "file": "T009_7.196857e+03K.npz"
+    },
+    {
+      "index": 10,
+      "temperature_K": 8961.50501946605,
+      "file": "T010_8.961505e+03K.npz"
+    },
+    {
+      "index": 11,
+      "temperature_K": 11158.83992507748,
+      "file": "T011_1.115884e+04K.npz"
+    },
+    {
+      "index": 12,
+      "temperature_K": 13894.95494373136,
+      "file": "T012_1.389495e+04K.npz"
+    },
+    {
+      "index": 13,
+      "temperature_K": 17301.95738845894,
+      "file": "T013_1.730196e+04K.npz"
+    },
+    {
+      "index": 14,
+      "temperature_K": 21544.346900318822,
+      "file": "T014_2.154435e+04K.npz"
+    },
+    {
+      "index": 15,
+      "temperature_K": 26826.95795279727,
+      "file": "T015_2.682696e+04K.npz"
+    },
+    {
+      "index": 16,
+      "temperature_K": 33404.849835132445,
+      "file": "T016_3.340485e+04K.npz"
+    },
+    {
+      "index": 17,
+      "temperature_K": 41595.62163071843,
+      "file": "T017_4.159562e+04K.npz"
+    },
+    {
+      "index": 18,
+      "temperature_K": 51794.74679231212,
+      "file": "T018_5.179475e+04K.npz"
+    },
+    {
+      "index": 19,
+      "temperature_K": 64494.667710376205,
+      "file": "T019_6.449467e+04K.npz"
+    },
+    {
+      "index": 20,
+      "temperature_K": 80308.5722139152,
+      "file": "T020_8.030857e+04K.npz"
+    },
+    {
       "index": 21,
       "temperature_K": 100000.0,
       "file": "T021_1.000000e+05K.npz"
