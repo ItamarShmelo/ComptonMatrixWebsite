@@ -8,6 +8,7 @@ let collapseCode = null;
 let fineBoundaries = null; // Float64Array from manifest
 let nFineGroups = 0;
 let nFineAngleBins = 0;
+let jszipLoaded = false;
 
 /* ── DOM refs ──────────────────────────────────────────── */
 
@@ -26,9 +27,15 @@ const customError = $("custom-boundaries-error");
 const nAnglesInput = $("n-angles");
 const nAnglesHint = $("n-angles-hint");
 const angleInfo = $("angle-info");
+const customAngleCheck = $("use-custom-angle-boundaries");
+const customAngleDiv = $("angle-boundaries-custom");
+const customAngleInput = $("custom-angle-input");
+const customAngleError = $("custom-angle-error");
 const summaryShape = $("summary-shape");
+const summaryAxes = $("summary-axes");
 const summarySize = $("summary-size");
 const btnDownload = $("btn-download");
+const btnDownloadAll = $("btn-download-all");
 const progressContainer = $("progress-container");
 const progressBar = $("progress-bar");
 const progressLabel = $("progress-label");
@@ -60,127 +67,95 @@ function formatTemp(t) {
   return `T${String(t._index).padStart(3, "0")}:  ${t.temperature_K.toExponential(3)} K  (${keV.toPrecision(4)} keV)`;
 }
 
-function getValidAngleDivisors(M) {
-  const divs = [];
-  for (let d = 1; d <= M; d++) {
-    if (M % d === 0) divs.push(d);
-  }
-  return divs;
-}
-
-function nearestDivisor(n, M) {
-  const divs = getValidAngleDivisors(M);
-  let best = divs[0];
-  for (const d of divs) {
-    if (Math.abs(d - n) < Math.abs(best - n)) best = d;
-  }
-  return best;
-}
-
-function pickLogSpacedSubset(boundaries, nCoarse) {
-  const G = boundaries.length - 1;
+function pickLogSpacedBoundaries(fineBounds, nCoarse) {
+  const G = fineBounds.length - 1;
   if (nCoarse >= G) {
-    return Array.from({ length: G + 1 }, (_, i) => i);
+    return Array.from(fineBounds);
   }
-  const indices = [0];
-  for (let i = 1; i < nCoarse; i++) {
+  return Array.from({ length: nCoarse + 1 }, (_, i) => {
     const frac = i / nCoarse;
-    const target = Math.round(frac * G);
-    if (target > indices[indices.length - 1] && target < G) {
-      indices.push(target);
-    }
-  }
-  indices.push(G);
-  // Deduplicate and ensure we have exactly nCoarse groups
-  while (indices.length - 1 < nCoarse) {
-    // Fill gaps by splitting the largest interval
-    let maxGap = 0, maxIdx = 0;
-    for (let i = 0; i < indices.length - 1; i++) {
-      const gap = indices[i + 1] - indices[i];
-      if (gap > maxGap) { maxGap = gap; maxIdx = i; }
-    }
-    if (maxGap <= 1) break;
-    indices.splice(maxIdx + 1, 0, Math.floor((indices[maxIdx] + indices[maxIdx + 1]) / 2));
-  }
-  while (indices.length - 1 > nCoarse) {
-    // Remove the index causing the smallest interval
-    let minGap = Infinity, minIdx = 1;
-    for (let i = 1; i < indices.length - 1; i++) {
-      const merged = indices[i + 1] - indices[i - 1];
-      if (merged < minGap) { minGap = merged; minIdx = i; }
-    }
-    indices.splice(minIdx, 1);
-  }
-  return indices;
+    const logMin = Math.log(fineBounds[0]);
+    const logMax = Math.log(fineBounds[G]);
+    return Math.exp(logMin + frac * (logMax - logMin));
+  });
 }
 
-function findNearestBoundaryIndex(value, boundaries) {
-  let best = 0;
-  let bestDist = Math.abs(Math.log(value) - Math.log(boundaries[0]));
-  for (let i = 1; i < boundaries.length; i++) {
-    const dist = Math.abs(Math.log(value) - Math.log(boundaries[i]));
-    if (dist < bestDist) { bestDist = dist; best = i; }
-  }
-  return best;
+function formatSize(bytes) {
+  if (bytes < 1024) return bytes + " B";
+  if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + " KB";
+  return (bytes / (1024 * 1024)).toFixed(1) + " MB";
 }
 
 /* ── UI update functions ───────────────────────────────── */
 
-function getCurrentGroupIndices() {
+function getCurrentEnergyBoundaries() {
   if (customCheck.checked) {
     return parseCustomBoundaries();
   }
   const n = Math.max(1, Math.min(nFineGroups, parseInt(nGroupsInput.value) || nFineGroups));
-  return pickLogSpacedSubset(fineBoundaries, n);
-}
-
-function getCurrentAngleFactor() {
-  const desired = parseInt(nAnglesInput.value) || nFineAngleBins;
-  const actual = nearestDivisor(desired, nFineAngleBins);
-  return nFineAngleBins / actual;
+  return pickLogSpacedBoundaries(fineBoundaries, n);
 }
 
 function getCurrentAngleBins() {
-  const desired = parseInt(nAnglesInput.value) || nFineAngleBins;
-  return nearestDivisor(desired, nFineAngleBins);
+  if (customAngleCheck.checked) {
+    const bounds = parseCustomAngleBoundaries();
+    if (bounds) return { boundaries: bounds };
+    return null;
+  }
+  const v = parseInt(nAnglesInput.value);
+  if (isNaN(v) || v < 1) return { count: 1 };
+  return { count: v };
+}
+
+function getAngleBinCount() {
+  const a = getCurrentAngleBins();
+  if (!a) return 0;
+  return a.count || (a.boundaries.length - 1);
 }
 
 function updateBoundariesDisplay() {
   if (!fineBoundaries) return;
   if (customCheck.checked) return;
 
-  const indices = getCurrentGroupIndices();
-  if (!indices) return;
-  const vals = indices.map((i) => fineBoundaries[i].toExponential(3));
+  const bounds = getCurrentEnergyBoundaries();
+  if (!bounds) return;
+  const vals = bounds.map((v) => v.toExponential(3));
   boundariesDisplay.textContent = vals.join("  ");
 }
 
 function updateSummary() {
-  const indices = getCurrentGroupIndices();
-  if (!indices) return;
+  const bounds = getCurrentEnergyBoundaries();
+  if (!bounds) return;
+  const angleCfg = getCurrentAngleBins();
+  if (!angleCfg) return;
 
-  const nG = indices.length - 1;
-  const nA = getCurrentAngleBins();
+  const nG = bounds.length - 1;
+  const nA = getAngleBinCount();
 
-  summaryShape.innerHTML = `${nG} &times; ${nG} &times; ${nA}`;
-  const bytes = nG * nG * nA * 8;
-  if (bytes < 1024) {
-    summarySize.textContent = bytes + " B";
-  } else if (bytes < 1024 * 1024) {
-    summarySize.textContent = (bytes / 1024).toFixed(1) + " KB";
+  if (nG === 1 && nA === 1) {
+    summaryShape.textContent = "scalar";
+    summaryAxes.textContent = "\u2014";
+  } else if (nG === 1) {
+    summaryShape.textContent = `${nA}`;
+    summaryAxes.textContent = "[angle bin]";
+  } else if (nA === 1) {
+    summaryShape.innerHTML = `${nG} &times; ${nG}`;
+    summaryAxes.textContent = "[incoming group] \u00D7 [outgoing group]";
   } else {
-    summarySize.textContent = (bytes / (1024 * 1024)).toFixed(1) + " MB";
+    summaryShape.innerHTML = `${nG} &times; ${nG} &times; ${nA}`;
+    summaryAxes.textContent = "[incoming group] \u00D7 [outgoing group] \u00D7 [angle bin]";
   }
+  const bytes = Math.max(1, nG * nG * nA) * 8;
+  summarySize.textContent = formatSize(bytes);
 }
 
 function updateAngleHints() {
-  const divs = getValidAngleDivisors(nFineAngleBins);
-  nAnglesHint.textContent = "Valid choices: " + divs.join(", ");
-  const actual = getCurrentAngleBins();
-  const factor = nFineAngleBins / actual;
-  angleInfo.textContent =
-    `Each output bin spans ${factor} fine bin${factor > 1 ? "s" : ""}; ` +
-    `bin width: \u0394\u03BE = ${(2 / actual).toFixed(4)}`;
+  if (customAngleCheck.checked) return;
+  const aInfo = getCurrentAngleBins();
+  if (!aInfo) return;
+  const nA = aInfo.count || 1;
+  nAnglesHint.textContent = `Any integer from 1 to ${nFineAngleBins}. Values above ${nFineAngleBins} exceed stored resolution.`;
+  angleInfo.textContent = `Bin width: \u0394\u03BE = ${(2 / nA).toFixed(6)}`;
 }
 
 function parseCustomBoundaries() {
@@ -206,42 +181,57 @@ function parseCustomBoundaries() {
       return null;
     }
   }
-
-  const tol = 1e-6;
-  if (Math.abs(Math.log(values[0]) - Math.log(fineBoundaries[0])) > tol) {
-    customError.textContent = `First boundary must equal ${fineBoundaries[0].toExponential(3)}.`;
-    customError.classList.add("error");
-    return null;
-  }
-  if (Math.abs(Math.log(values[values.length - 1]) - Math.log(fineBoundaries[fineBoundaries.length - 1])) > tol) {
-    customError.textContent = `Last boundary must equal ${fineBoundaries[fineBoundaries.length - 1].toExponential(3)}.`;
+  if (values[0] <= 0) {
+    customError.textContent = "Boundaries must be positive.";
     customError.classList.add("error");
     return null;
   }
 
-  const indices = [];
-  for (const v of values) {
-    const idx = findNearestBoundaryIndex(v, fineBoundaries);
-    const ratio = Math.abs(Math.log(v) - Math.log(fineBoundaries[idx]));
-    if (ratio > tol) {
-      customError.textContent = `Value ${v.toExponential(3)} does not match any fine grid boundary.`;
-      customError.classList.add("error");
-      return null;
-    }
-    indices.push(idx);
+  const eMin = fineBoundaries[0];
+  const eMax = fineBoundaries[fineBoundaries.length - 1];
+  if (values[0] < eMin * (1 - 1e-6) || values[values.length - 1] > eMax * (1 + 1e-6)) {
+    customError.textContent = `Boundaries must lie within [${eMin.toExponential(3)}, ${eMax.toExponential(3)}] keV.`;
+    customError.classList.add("error");
+    return null;
   }
 
-  for (let i = 1; i < indices.length; i++) {
-    if (indices[i] <= indices[i - 1]) {
-      customError.textContent = "Resolved indices are not strictly increasing (duplicates?).";
-      customError.classList.add("error");
-      return null;
-    }
-  }
-
-  customError.textContent = `\u2713 ${indices.length - 1} groups resolved.`;
+  customError.textContent = `\u2713 ${values.length - 1} groups defined.`;
   customError.classList.remove("error");
-  return indices;
+  return values;
+}
+
+function parseCustomAngleBoundaries() {
+  const text = customAngleInput.value.trim();
+  if (!text) { customAngleError.textContent = ""; return null; }
+
+  const tokens = text.split(/[\s,]+/).filter(Boolean);
+  const values = tokens.map(Number);
+  if (values.some(isNaN)) {
+    customAngleError.textContent = "Non-numeric value found.";
+    customAngleError.classList.add("error");
+    return null;
+  }
+  if (values.length < 2) {
+    customAngleError.textContent = "Need at least 2 boundary values.";
+    customAngleError.classList.add("error");
+    return null;
+  }
+  for (let i = 1; i < values.length; i++) {
+    if (values[i] <= values[i - 1]) {
+      customAngleError.textContent = "Boundaries must be strictly increasing.";
+      customAngleError.classList.add("error");
+      return null;
+    }
+  }
+  if (values[0] < -1 - 1e-9 || values[values.length - 1] > 1 + 1e-9) {
+    customAngleError.textContent = "Boundaries must lie within [\u22121, 1].";
+    customAngleError.classList.add("error");
+    return null;
+  }
+
+  customAngleError.textContent = `\u2713 ${values.length - 1} angle bins defined.`;
+  customAngleError.classList.remove("error");
+  return values;
 }
 
 /* ── Event wiring ──────────────────────────────────────── */
@@ -285,38 +275,88 @@ function wireEvents() {
     updateSummary();
   });
 
-  nAnglesInput.addEventListener("change", () => {
-    const desired = parseInt(nAnglesInput.value) || nFineAngleBins;
-    const actual = nearestDivisor(desired, nFineAngleBins);
-    nAnglesInput.value = actual;
-    updateAngleHints();
+  customAngleCheck.addEventListener("change", () => {
+    if (customAngleCheck.checked) {
+      nAnglesInput.disabled = true;
+      customAngleDiv.style.display = "block";
+      nAnglesHint.textContent = "";
+      angleInfo.textContent = "";
+    } else {
+      nAnglesInput.disabled = false;
+      customAngleDiv.style.display = "none";
+      customAngleError.textContent = "";
+      updateAngleHints();
+    }
     updateSummary();
   });
 
-  tempSelect.addEventListener("change", () => {
-    btnDownload.disabled = !tempSelect.value || !pyodide;
+  customAngleInput.addEventListener("input", () => {
+    parseCustomAngleBoundaries();
+    updateSummary();
   });
 
+  tempSelect.addEventListener("change", updateButtonStates);
+
   btnDownload.addEventListener("click", handleDownload);
+  btnDownloadAll.addEventListener("click", handleDownloadAll);
 }
 
-/* ── Download handler ──────────────────────────────────── */
+function updateButtonStates() {
+  btnDownload.disabled = !tempSelect.value || !pyodide;
+  btnDownloadAll.disabled = !jszipLoaded || !pyodide || !manifest;
+}
+
+/* ── Progress helpers ──────────────────────────────────── */
+
+function showProgress(pct, label) {
+  progressContainer.classList.add("visible");
+  progressBar.style.width = pct + "%";
+  progressLabel.textContent = label;
+}
+
+function hideProgress() {
+  setTimeout(() => {
+    progressContainer.classList.remove("visible");
+    progressBar.style.width = "0%";
+  }, 2000);
+}
+
+/* ── Collapse call builder ─────────────────────────────── */
+
+function buildCollapseCall(energyBounds, angleInfo) {
+  const anglePyArg = angleInfo.boundaries
+    ? `angle_boundaries=[${angleInfo.boundaries.join(",")}]`
+    : `n_angle_bins=${angleInfo.count}`;
+  return `collapse(\n    open("/tmp/input.npz", "rb").read(),\n    [${energyBounds.join(",")}],\n    ${anglePyArg},\n)`;
+}
+
+function isIdentityGrid(energyBounds, angleInfo) {
+  if (angleInfo.boundaries) return false;
+  if (angleInfo.count !== nFineAngleBins) return false;
+  if (energyBounds.length !== fineBoundaries.length) return false;
+  for (let i = 0; i < energyBounds.length; i++) {
+    if (Math.abs(energyBounds[i] - fineBoundaries[i]) > fineBoundaries[i] * 1e-9)
+      return false;
+  }
+  return true;
+}
+
+/* ── Single-temperature download ───────────────────────── */
 
 async function handleDownload() {
   const tempIdx = parseInt(tempSelect.value);
   const tempEntry = manifest.temperatures.find((t) => t.index === tempIdx);
   if (!tempEntry || !pyodide) return;
 
-  const groupIndices = getCurrentGroupIndices();
-  if (!groupIndices) return;
-  const angleFactor = getCurrentAngleFactor();
-  const nCoarseGroups = groupIndices.length - 1;
-  const nCoarseAngles = getCurrentAngleBins();
+  const energyBounds = getCurrentEnergyBoundaries();
+  if (!energyBounds) return;
+  const angleInfo = getCurrentAngleBins();
+  if (!angleInfo) return;
+  const nCoarseGroups = energyBounds.length - 1;
+  const nA = getAngleBinCount();
 
   btnDownload.disabled = true;
-  progressContainer.classList.add("visible");
-  progressBar.style.width = "10%";
-  progressLabel.textContent = `Fetching ${tempEntry.file}\u2026`;
+  showProgress(10, `Fetching ${tempEntry.file}\u2026`);
 
   try {
     const npzUrl = `data/${tempEntry.file}`;
@@ -324,44 +364,108 @@ async function handleDownload() {
     if (!resp.ok) throw new Error(`Failed to fetch ${npzUrl}: ${resp.status}`);
     const npzBuf = await resp.arrayBuffer();
 
-    progressBar.style.width = "50%";
-    progressLabel.textContent = "Collapsing matrix\u2026";
+    showProgress(50, "Collapsing matrix\u2026");
 
     pyodide.FS.writeFile("/tmp/input.npz", new Uint8Array(npzBuf));
 
-    const npyBytes = await pyodide.runPythonAsync(`
-collapse(
-    open("/tmp/input.npz", "rb").read(),
-    [${groupIndices.join(",")}],
-    ${angleFactor},
-)
-    `);
+    const npyBytes = await pyodide.runPythonAsync(buildCollapseCall(energyBounds, angleInfo));
 
-    progressBar.style.width = "90%";
-    progressLabel.textContent = "Preparing download\u2026";
+    showProgress(90, "Preparing download\u2026");
 
     const blob = new Blob([npyBytes.toJs()], { type: "application/octet-stream" });
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
-    a.download = `compton_sigma_T${String(tempIdx).padStart(3, "0")}_${nCoarseGroups}g_${nCoarseAngles}a.npy`;
+    a.download = `compton_sigma_T${String(tempIdx).padStart(3, "0")}_${nCoarseGroups}g_${nA}a.npy`;
     document.body.appendChild(a);
     a.click();
     a.remove();
     URL.revokeObjectURL(url);
 
-    progressBar.style.width = "100%";
-    progressLabel.textContent = "Download complete.";
-    setTimeout(() => {
-      progressContainer.classList.remove("visible");
-      progressBar.style.width = "0%";
-    }, 2000);
+    showProgress(100, "Download complete.");
+    hideProgress();
   } catch (err) {
     progressLabel.textContent = "Error: " + err.message;
     progressBar.style.width = "0%";
     console.error(err);
   } finally {
     btnDownload.disabled = false;
+  }
+}
+
+/* ── Bulk download: all temperatures ───────────────────── */
+
+async function handleDownloadAll() {
+  if (!manifest || !jszipLoaded || !pyodide) return;
+
+  const energyBounds = getCurrentEnergyBoundaries();
+  if (!energyBounds) return;
+  const angleInfo = getCurrentAngleBins();
+  if (!angleInfo) return;
+  const nCoarseGroups = energyBounds.length - 1;
+  const nA = getAngleBinCount();
+  const identity = isIdentityGrid(energyBounds, angleInfo);
+
+  const perFileBytes = nCoarseGroups * nCoarseGroups * nA * 8;
+  const totalEstimate = perFileBytes * manifest.temperatures.length;
+  if (totalEstimate > 200 * 1024 * 1024) {
+    const sizeMB = (totalEstimate / (1024 * 1024)).toFixed(0);
+    if (!confirm(
+      `Estimated total size: ~${sizeMB} MB.\n\n` +
+      `This may use significant browser memory. Consider using a coarser grid.\n\nProceed?`
+    )) return;
+  }
+
+  const total = manifest.temperatures.length;
+  btnDownloadAll.disabled = true;
+  showProgress(0, `${identity ? "Fetching" : "Processing"} 0/${total}\u2026`);
+
+  try {
+    const collapseExpr = identity ? null : buildCollapseCall(energyBounds, angleInfo);
+    const zip = new JSZip();
+    for (let i = 0; i < total; i++) {
+      const t = manifest.temperatures[i];
+      const resp = await fetch(`data/${t.file}`);
+      if (!resp.ok) throw new Error(`Failed to fetch ${t.file}: ${resp.status}`);
+      const npzBuf = await resp.arrayBuffer();
+
+      if (identity) {
+        zip.file(t.file, npzBuf);
+      } else {
+        pyodide.FS.writeFile("/tmp/input.npz", new Uint8Array(npzBuf));
+        const npyBytes = await pyodide.runPythonAsync(collapseExpr);
+        const fname = `compton_sigma_T${String(t.index).padStart(3, "0")}_${nCoarseGroups}g_${nA}a.npy`;
+        zip.file(fname, npyBytes.toJs());
+      }
+      showProgress(
+        Math.round(((i + 1) / total) * 90),
+        `${identity ? "Fetching" : "Processing"} ${i + 1}/${total}\u2026`
+      );
+    }
+
+    showProgress(92, "Compressing ZIP\u2026");
+    const blob = await zip.generateAsync({ type: "blob" });
+
+    showProgress(98, "Preparing download\u2026");
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = identity
+      ? "compton_all_temperatures_raw.zip"
+      : `compton_all_temperatures_${nCoarseGroups}g_${nA}a.zip`;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(url);
+
+    showProgress(100, "Download complete.");
+    hideProgress();
+  } catch (err) {
+    progressLabel.textContent = "Error: " + err.message;
+    progressBar.style.width = "0%";
+    console.error(err);
+  } finally {
+    updateButtonStates();
   }
 }
 
@@ -383,10 +487,21 @@ async function loadManifest() {
   const tMin = manifest.temperatures[0];
   const tMax = manifest.temperatures[manifest.temperatures.length - 1];
 
+  function texExp(v) {
+    const s = v.toExponential(1);
+    const [m, e] = s.split("e");
+    const exp = parseInt(e, 10);
+    return `${m}\\times10^{${exp}}`;
+  }
+  const eLoTex = texExp(fineBoundaries[0]);
+  const eHiTex = texExp(fineBoundaries[fineBoundaries.length - 1]);
+  const tLoTex = texExp(tMin.temperature_K);
+  const tHiTex = texExp(tMax.temperature_K);
   gridSummary.innerHTML =
-    `${nFineGroups} energy groups (${fineBoundaries[0].toExponential(1)} \u2013 ${fineBoundaries[fineBoundaries.length - 1].toExponential(1)} keV, log-spaced)<br>` +
-    `${nFineAngleBins} angle bins (\u03BE = cos\u03B8 \u2208 [\u22121, 1])<br>` +
-    `${manifest.temperatures.length} temperatures (${tMin.temperature_K.toExponential(1)} \u2013 ${tMax.temperature_K.toExponential(1)} K, log-spaced)`;
+    `${nFineGroups} energy groups (\\(${eLoTex}\\) \u2013 \\(${eHiTex}\\) keV, log-spaced)<br>` +
+    `${nFineAngleBins} angle bins (\\(\\xi = \\cos\\theta \\in [-1,\\,1]\\))<br>` +
+    `${manifest.temperatures.length} temperatures (\\(${tLoTex}\\) \u2013 \\(${tHiTex}\\) K, log-spaced)`;
+  if (window.renderMathInElement) renderMathInElement(gridSummary, {delimiters:[{left:'$$',right:'$$',display:true},{left:'\\(',right:'\\)',display:false}]});
 
   tempSelect.innerHTML = '<option value="">-- select temperature --</option>';
   for (const t of manifest.temperatures) {
@@ -401,6 +516,7 @@ async function loadManifest() {
   updateBoundariesDisplay();
   updateAngleHints();
   updateSummary();
+  updateButtonStates();
 }
 
 async function loadPyodide_() {
@@ -417,7 +533,7 @@ async function loadPyodide_() {
   pyodide = pyodideModule;
 
   banner.classList.add("hidden");
-  if (tempSelect.value) btnDownload.disabled = false;
+  updateButtonStates();
 }
 
 async function init() {
@@ -425,15 +541,23 @@ async function init() {
 
   const manifestPromise = loadManifest();
 
-  const script = document.createElement("script");
-  script.src = "https://cdn.jsdelivr.net/pyodide/v0.27.6/full/pyodide.js";
-  script.addEventListener("load", () => {
+  const pyodideScript = document.createElement("script");
+  pyodideScript.src = "https://cdn.jsdelivr.net/pyodide/v0.27.6/full/pyodide.js";
+  pyodideScript.addEventListener("load", () => {
     loadPyodide_().catch((err) => {
       banner.textContent = "Failed to load Python runtime: " + err.message;
       console.error(err);
     });
   });
-  document.head.appendChild(script);
+  document.head.appendChild(pyodideScript);
+
+  const jszipScript = document.createElement("script");
+  jszipScript.src = "https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js";
+  jszipScript.addEventListener("load", () => {
+    jszipLoaded = true;
+    updateButtonStates();
+  });
+  document.head.appendChild(jszipScript);
 
   await manifestPromise;
 }

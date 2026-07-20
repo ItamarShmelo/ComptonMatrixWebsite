@@ -4,5 +4,6 @@ output/plots/
 logs/
 __pycache__/
 *.pyc
+*.log
 .venv/
 build/
