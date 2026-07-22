@@ -209,13 +209,15 @@ select {
 
 select[multiple] {
   height: auto;
-  min-height: 160px;
+  min-height: 240px;
   padding: 0.25rem;
 }
 
 select[multiple] option {
   padding: 0.3rem 0.5rem;
+  border: 1px solid #000;
   border-radius: 3px;
+  margin-bottom: 2px;
 }
 
 select[multiple] option:checked {
