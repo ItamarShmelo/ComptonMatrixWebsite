@@ -16,6 +16,11 @@ const $ = (id) => document.getElementById(id);
 const banner = $("loading-banner");
 const gridSummary = $("grid-summary");
 const tempSelect = $("temperature-select");
+const customTempCheck = $("use-custom-temperature");
+const customTempDiv = $("temperature-custom");
+const customTempInput = $("custom-temperature-input");
+const customTempError = $("custom-temperature-error");
+const tempHint = $("temperature-hint");
 const nGroupsInput = $("n-groups");
 const nGroupsHint = $("n-groups-hint");
 const boundariesDisplay = $("boundaries-display");
@@ -36,6 +41,7 @@ const summaryAxes = $("summary-axes");
 const summarySize = $("summary-size");
 const btnDownload = $("btn-download");
 const btnDownloadAll = $("btn-download-all");
+const btnDownloadMetadata = $("btn-download-metadata");
 const progressContainer = $("progress-container");
 const progressBar = $("progress-bar");
 const progressLabel = $("progress-label");
@@ -86,6 +92,95 @@ function formatSize(bytes) {
   return (bytes / (1024 * 1024)).toFixed(1) + " MB";
 }
 
+/* ── Temperature helpers ──────────────────────────────── */
+
+function getTemperatureRange() {
+  if (!manifest) return { min: 1000, max: 1e9 };
+  const temps = manifest.temperatures;
+  return {
+    min: temps[0].temperature_K,
+    max: temps[temps.length - 1].temperature_K,
+  };
+}
+
+function findBracketingTemps(T_target) {
+  const temps = manifest.temperatures;
+  if (T_target <= temps[0].temperature_K) return { lo: 0, hi: 0, exact: true };
+  if (T_target >= temps[temps.length - 1].temperature_K) {
+    return { lo: temps.length - 1, hi: temps.length - 1, exact: true };
+  }
+  for (let i = 0; i < temps.length - 1; i++) {
+    const tLo = temps[i].temperature_K;
+    const tHi = temps[i + 1].temperature_K;
+    if (Math.abs(T_target - tLo) / tLo < 1e-9) return { lo: i, hi: i, exact: true };
+    if (Math.abs(T_target - tHi) / tHi < 1e-9) return { lo: i + 1, hi: i + 1, exact: true };
+    if (T_target > tLo && T_target < tHi) return { lo: i, hi: i + 1, exact: false };
+  }
+  return { lo: temps.length - 1, hi: temps.length - 1, exact: true };
+}
+
+function getSelectedTemperatures() {
+  if (customTempCheck.checked) {
+    return parseCustomTemperatures();
+  }
+  const selected = Array.from(tempSelect.selectedOptions)
+    .map((opt) => parseInt(opt.value))
+    .filter((v) => !isNaN(v));
+  if (selected.length === 0) return null;
+  const temps = selected.map((idx) => {
+    const entry = manifest.temperatures.find((t) => t.index === idx);
+    return entry ? entry.temperature_K : null;
+  }).filter((v) => v !== null);
+  return deduplicateAndSort(temps);
+}
+
+function deduplicateAndSort(temps) {
+  const sorted = [...temps].sort((a, b) => a - b);
+  const deduped = [sorted[0]];
+  for (let i = 1; i < sorted.length; i++) {
+    if (Math.abs(sorted[i] - deduped[deduped.length - 1]) / sorted[i] > 1e-9) {
+      deduped.push(sorted[i]);
+    }
+  }
+  return deduped;
+}
+
+function parseCustomTemperatures() {
+  const text = customTempInput.value.trim();
+  if (!text) { customTempError.textContent = ""; return null; }
+
+  const tokens = text.split(/[\s,]+/).filter(Boolean);
+  const values = tokens.map(Number);
+  if (values.some(isNaN)) {
+    customTempError.textContent = "Non-numeric value found.";
+    customTempError.classList.add("error");
+    return null;
+  }
+  if (values.length < 1) {
+    customTempError.textContent = "Enter at least one temperature.";
+    customTempError.classList.add("error");
+    return null;
+  }
+  if (values.some((v) => v <= 0)) {
+    customTempError.textContent = "Temperatures must be positive.";
+    customTempError.classList.add("error");
+    return null;
+  }
+
+  const range = getTemperatureRange();
+  if (values.some((v) => v < range.min * (1 - 1e-6) || v > range.max * (1 + 1e-6))) {
+    customTempError.textContent =
+      `Temperatures must lie within [${range.min.toExponential(3)}, ${range.max.toExponential(3)}] K.`;
+    customTempError.classList.add("error");
+    return null;
+  }
+
+  const sorted = deduplicateAndSort(values);
+  customTempError.textContent = `\u2713 ${sorted.length} temperature(s) specified.`;
+  customTempError.classList.remove("error");
+  return sorted;
+}
+
 /* ── UI update functions ───────────────────────────────── */
 
 function getCurrentEnergyBoundaries() {
@@ -113,6 +208,16 @@ function getAngleBinCount() {
   return a.count || (a.boundaries.length - 1);
 }
 
+function getAngleBoundariesArray() {
+  const a = getCurrentAngleBins();
+  if (!a) return null;
+  if (a.boundaries) return a.boundaries;
+  const nA = a.count;
+  const bounds = [];
+  for (let i = 0; i <= nA; i++) bounds.push(-1 + (2 * i) / nA);
+  return bounds;
+}
+
 function updateBoundariesDisplay() {
   if (!fineBoundaries) return;
   if (customCheck.checked) return;
@@ -131,22 +236,31 @@ function updateSummary() {
 
   const nG = bounds.length - 1;
   const nA = getAngleBinCount();
+  const temps = getSelectedTemperatures();
+  const nT = temps ? temps.length : 0;
 
-  if (nG === 1 && nA === 1) {
+  if (nT > 1) {
+    summaryShape.innerHTML = `${nT} &times; ${nG} &times; ${nG} &times; ${nA}`;
+    summaryAxes.textContent = "[temperature] \u00D7 [incoming group] \u00D7 [outgoing group] \u00D7 [angle bin]";
+    const bytes = nT * nG * nG * nA * 8;
+    summarySize.textContent = formatSize(bytes);
+  } else if (nG === 1 && nA === 1) {
     summaryShape.textContent = "scalar";
     summaryAxes.textContent = "\u2014";
+    summarySize.textContent = "8 B";
   } else if (nG === 1) {
     summaryShape.textContent = `${nA}`;
     summaryAxes.textContent = "[angle bin]";
+    summarySize.textContent = formatSize(nA * 8);
   } else if (nA === 1) {
     summaryShape.innerHTML = `${nG} &times; ${nG}`;
     summaryAxes.textContent = "[incoming group] \u00D7 [outgoing group]";
+    summarySize.textContent = formatSize(nG * nG * 8);
   } else {
     summaryShape.innerHTML = `${nG} &times; ${nG} &times; ${nA}`;
     summaryAxes.textContent = "[incoming group] \u00D7 [outgoing group] \u00D7 [angle bin]";
+    summarySize.textContent = formatSize(nG * nG * nA * 8);
   }
-  const bytes = Math.max(1, nG * nG * nA) * 8;
-  summarySize.textContent = formatSize(bytes);
 }
 
 function updateAngleHints() {
@@ -295,15 +409,44 @@ function wireEvents() {
     updateSummary();
   });
 
-  tempSelect.addEventListener("change", updateButtonStates);
+  customTempCheck.addEventListener("change", () => {
+    if (customTempCheck.checked) {
+      tempSelect.disabled = true;
+      customTempDiv.style.display = "block";
+      tempHint.style.display = "none";
+    } else {
+      tempSelect.disabled = false;
+      customTempDiv.style.display = "none";
+      tempHint.style.display = "";
+      customTempError.textContent = "";
+    }
+    updateSummary();
+    updateButtonStates();
+  });
+
+  customTempInput.addEventListener("input", () => {
+    parseCustomTemperatures();
+    updateSummary();
+    updateButtonStates();
+  });
+
+  tempSelect.addEventListener("change", () => {
+    updateSummary();
+    updateButtonStates();
+  });
 
   btnDownload.addEventListener("click", handleDownload);
   btnDownloadAll.addEventListener("click", handleDownloadAll);
+  btnDownloadMetadata.addEventListener("click", handleDownloadMetadata);
 }
 
 function updateButtonStates() {
-  btnDownload.disabled = !tempSelect.value || !pyodide;
+  const hasTemp = customTempCheck.checked
+    ? parseCustomTemperatures() !== null
+    : tempSelect.selectedOptions.length > 0;
+  btnDownload.disabled = !hasTemp || !pyodide;
   btnDownloadAll.disabled = !jszipLoaded || !pyodide || !manifest;
+  btnDownloadMetadata.disabled = !hasTemp || !pyodide;
 }
 
 /* ── Progress helpers ──────────────────────────────────── */
@@ -321,7 +464,21 @@ function hideProgress() {
   }, 2000);
 }
 
-/* ── Collapse call builder ─────────────────────────────── */
+/* ── Collapse call builders ────────────────────────────── */
+
+function buildCollapseToArrayCall(energyBounds, angleInfo) {
+  const anglePyArg = angleInfo.boundaries
+    ? `angle_boundaries=[${angleInfo.boundaries.join(",")}]`
+    : `n_angle_bins=${angleInfo.count}`;
+  return `_collapse_to_array(\n    open("/tmp/input.npz", "rb").read(),\n    [${energyBounds.join(",")}],\n    ${anglePyArg},\n)`;
+}
+
+function buildCollapseInterpCall(energyBounds, angleInfo, T_lo, T_hi, T_target) {
+  const anglePyArg = angleInfo.boundaries
+    ? `angle_boundaries=[${angleInfo.boundaries.join(",")}]`
+    : `n_angle_bins=${angleInfo.count}`;
+  return `collapse_interp(\n    open("/tmp/input_lo.npz", "rb").read(),\n    open("/tmp/input_hi.npz", "rb").read(),\n    ${T_lo}, ${T_hi}, ${T_target},\n    [${energyBounds.join(",")}],\n    ${anglePyArg},\n)`;
+}
 
 function buildCollapseCall(energyBounds, angleInfo) {
   const anglePyArg = angleInfo.boundaries
@@ -341,12 +498,11 @@ function isIdentityGrid(energyBounds, angleInfo) {
   return true;
 }
 
-/* ── Single-temperature download ───────────────────────── */
+/* ── Single/multi-temperature download ─────────────────── */
 
 async function handleDownload() {
-  const tempIdx = parseInt(tempSelect.value);
-  const tempEntry = manifest.temperatures.find((t) => t.index === tempIdx);
-  if (!tempEntry || !pyodide) return;
+  const temps = getSelectedTemperatures();
+  if (!temps || temps.length === 0 || !pyodide) return;
 
   const energyBounds = getCurrentEnergyBoundaries();
   if (!energyBounds) return;
@@ -354,29 +510,135 @@ async function handleDownload() {
   if (!angleInfo) return;
   const nCoarseGroups = energyBounds.length - 1;
   const nA = getAngleBinCount();
+  const nT = temps.length;
 
   btnDownload.disabled = true;
-  showProgress(10, `Fetching ${tempEntry.file}\u2026`);
+  showProgress(5, "Processing\u2026");
 
   try {
-    const npzUrl = `data/${tempEntry.file}`;
-    const resp = await fetch(npzUrl);
-    if (!resp.ok) throw new Error(`Failed to fetch ${npzUrl}: ${resp.status}`);
-    const npzBuf = await resp.arrayBuffer();
+    const collapseCache = new Map();
 
-    showProgress(50, "Collapsing matrix\u2026");
+    async function getCollapsedForStoredIndex(idx) {
+      if (collapseCache.has(idx)) return collapseCache.get(idx);
+      const entry = manifest.temperatures[idx];
+      const resp = await fetch(`data/${entry.file}`);
+      if (!resp.ok) throw new Error(`Failed to fetch ${entry.file}: ${resp.status}`);
+      const npzBuf = await resp.arrayBuffer();
+      pyodide.FS.writeFile("/tmp/input.npz", new Uint8Array(npzBuf));
+      const arr = await pyodide.runPythonAsync(buildCollapseToArrayCall(energyBounds, angleInfo));
+      const result = arr.toJs({ create_proxies: false });
+      collapseCache.set(idx, result);
+      return result;
+    }
 
-    pyodide.FS.writeFile("/tmp/input.npz", new Uint8Array(npzBuf));
+    const arrays = [];
+    for (let i = 0; i < nT; i++) {
+      showProgress(5 + Math.round((i / nT) * 80), `Processing temperature ${i + 1}/${nT}\u2026`);
+      const T = temps[i];
+      const bracket = findBracketingTemps(T);
 
-    const npyBytes = await pyodide.runPythonAsync(buildCollapseCall(energyBounds, angleInfo));
+      if (bracket.exact) {
+        const arr = await getCollapsedForStoredIndex(bracket.lo);
+        arrays.push(arr);
+      } else {
+        const entryLo = manifest.temperatures[bracket.lo];
+        const entryHi = manifest.temperatures[bracket.hi];
 
-    showProgress(90, "Preparing download\u2026");
+        // Fetch both bracketing files
+        let loData, hiData;
+        if (collapseCache.has(bracket.lo)) {
+          loData = collapseCache.get(bracket.lo);
+        }
+        if (collapseCache.has(bracket.hi)) {
+          hiData = collapseCache.get(bracket.hi);
+        }
+
+        if (loData && hiData) {
+          // Interpolate from cached collapsed arrays
+          const alpha = (Math.log(T) - Math.log(entryLo.temperature_K)) /
+            (Math.log(entryHi.temperature_K) - Math.log(entryLo.temperature_K));
+          const interpResult = await pyodide.runPythonAsync(`
+import numpy as np
+_lo = np.array(${JSON.stringify(Array.from(loData))}).reshape(${nCoarseGroups}, ${nCoarseGroups}, ${nA})
+_hi = np.array(${JSON.stringify(Array.from(hiData))}).reshape(${nCoarseGroups}, ${nCoarseGroups}, ${nA})
+(1.0 - ${alpha}) * _lo + ${alpha} * _hi
+`);
+          arrays.push(interpResult.toJs({ create_proxies: false }));
+        } else {
+          // Use collapse_interp with file I/O
+          const [respLo, respHi] = await Promise.all([
+            fetch(`data/${entryLo.file}`),
+            fetch(`data/${entryHi.file}`),
+          ]);
+          if (!respLo.ok) throw new Error(`Failed to fetch ${entryLo.file}`);
+          if (!respHi.ok) throw new Error(`Failed to fetch ${entryHi.file}`);
+          const [bufLo, bufHi] = await Promise.all([
+            respLo.arrayBuffer(),
+            respHi.arrayBuffer(),
+          ]);
+          pyodide.FS.writeFile("/tmp/input_lo.npz", new Uint8Array(bufLo));
+          pyodide.FS.writeFile("/tmp/input_hi.npz", new Uint8Array(bufHi));
+          const interpArr = await pyodide.runPythonAsync(
+            buildCollapseInterpCall(energyBounds, angleInfo, entryLo.temperature_K, entryHi.temperature_K, T)
+          );
+          const result = interpArr.toJs({ create_proxies: false });
+          arrays.push(result);
+
+          // Also cache the individual collapsed results for future use
+          if (!collapseCache.has(bracket.lo)) {
+            pyodide.FS.writeFile("/tmp/input.npz", new Uint8Array(bufLo));
+            const loArr = await pyodide.runPythonAsync(buildCollapseToArrayCall(energyBounds, angleInfo));
+            collapseCache.set(bracket.lo, loArr.toJs({ create_proxies: false }));
+          }
+          if (!collapseCache.has(bracket.hi)) {
+            pyodide.FS.writeFile("/tmp/input.npz", new Uint8Array(bufHi));
+            const hiArr = await pyodide.runPythonAsync(buildCollapseToArrayCall(energyBounds, angleInfo));
+            collapseCache.set(bracket.hi, hiArr.toJs({ create_proxies: false }));
+          }
+        }
+      }
+    }
+
+    showProgress(88, "Building output array\u2026");
+
+    let npyBytes;
+    if (nT === 1) {
+      // Single temperature: apply edge-case reductions
+      const flatData = JSON.stringify(Array.from(arrays[0]));
+      npyBytes = await pyodide.runPythonAsync(`
+import numpy as np, io
+_arr = np.array(${flatData}).reshape(${nCoarseGroups}, ${nCoarseGroups}, ${nA})
+N, _, K = _arr.shape
+if N == 1 and K == 1:
+    _arr = _arr.ravel()[0]
+elif N == 1:
+    _arr = _arr[0, 0, :]
+elif K == 1:
+    _arr = _arr[:, :, 0]
+_buf = io.BytesIO()
+np.save(_buf, _arr)
+_buf.getvalue()
+`);
+    } else {
+      // Multiple temperatures: stack into 4D array
+      const allFlat = arrays.map((a) => Array.from(a));
+      npyBytes = await pyodide.runPythonAsync(`
+import numpy as np, io
+_data = ${JSON.stringify(allFlat)}
+_stacked = np.array(_data, dtype=np.float64).reshape(${nT}, ${nCoarseGroups}, ${nCoarseGroups}, ${nA})
+_buf = io.BytesIO()
+np.save(_buf, _stacked)
+_buf.getvalue()
+`);
+    }
+
+    showProgress(95, "Preparing download\u2026");
 
     const blob = new Blob([npyBytes.toJs()], { type: "application/octet-stream" });
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
-    a.download = `compton_sigma_T${String(tempIdx).padStart(3, "0")}_${nCoarseGroups}g_${nA}a.npy`;
+    a.download = buildFilename(temps, nCoarseGroups, nA);
     document.body.appendChild(a);
     a.click();
     a.remove();
@@ -389,8 +651,24 @@ async function handleDownload() {
     progressBar.style.width = "0%";
     console.error(err);
   } finally {
-    btnDownload.disabled = false;
+    updateButtonStates();
   }
+}
+
+function buildFilename(temps, nG, nA) {
+  const nT = temps.length;
+  if (nT === 1) {
+    const T = temps[0];
+    // Check if it matches a stored temperature
+    const bracket = findBracketingTemps(T);
+    if (bracket.exact) {
+      const idx = bracket.lo;
+      return `compton_sigma_T${String(idx).padStart(3, "0")}_${nG}g_${nA}a.npy`;
+    } else {
+      return `compton_sigma_T${T.toExponential(3)}K_${nG}g_${nA}a.npy`;
+    }
+  }
+  return `compton_sigma_${nT}T_${nG}g_${nA}a.npy`;
 }
 
 /* ── Bulk download: all temperatures ───────────────────── */
@@ -406,8 +684,10 @@ async function handleDownloadAll() {
   const nA = getAngleBinCount();
   const identity = isIdentityGrid(energyBounds, angleInfo);
 
+  const total = manifest.temperatures.length;
   const perFileBytes = nCoarseGroups * nCoarseGroups * nA * 8;
-  const totalEstimate = perFileBytes * manifest.temperatures.length;
+  const totalEstimate = perFileBytes * total;
+
   if (totalEstimate > 200 * 1024 * 1024) {
     const sizeMB = (totalEstimate / (1024 * 1024)).toFixed(0);
     if (!confirm(
@@ -416,43 +696,75 @@ async function handleDownloadAll() {
     )) return;
   }
 
-  const total = manifest.temperatures.length;
   btnDownloadAll.disabled = true;
-  showProgress(0, `${identity ? "Fetching" : "Processing"} 0/${total}\u2026`);
 
+  // Identity grid: fallback to raw .npz ZIP (existing behavior)
+  if (identity) {
+    showProgress(0, `Fetching 0/${total}\u2026`);
+    try {
+      const zip = new JSZip();
+      for (let i = 0; i < total; i++) {
+        const t = manifest.temperatures[i];
+        const resp = await fetch(`data/${t.file}`);
+        if (!resp.ok) throw new Error(`Failed to fetch ${t.file}: ${resp.status}`);
+        const npzBuf = await resp.arrayBuffer();
+        zip.file(t.file, npzBuf);
+        showProgress(Math.round(((i + 1) / total) * 90), `Fetching ${i + 1}/${total}\u2026`);
+      }
+      showProgress(92, "Compressing ZIP\u2026");
+      const blob = await zip.generateAsync({ type: "blob" });
+      showProgress(98, "Preparing download\u2026");
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = "compton_all_temperatures_raw.zip";
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+      showProgress(100, "Download complete.");
+      hideProgress();
+    } catch (err) {
+      progressLabel.textContent = "Error: " + err.message;
+      progressBar.style.width = "0%";
+      console.error(err);
+    } finally {
+      updateButtonStates();
+    }
+    return;
+  }
+
+  // Non-identity grid: build single 4D .npy
+  showProgress(0, `Processing 0/${total}\u2026`);
   try {
-    const collapseExpr = identity ? null : buildCollapseCall(energyBounds, angleInfo);
-    const zip = new JSZip();
+    const allArrays = [];
     for (let i = 0; i < total; i++) {
       const t = manifest.temperatures[i];
       const resp = await fetch(`data/${t.file}`);
       if (!resp.ok) throw new Error(`Failed to fetch ${t.file}: ${resp.status}`);
       const npzBuf = await resp.arrayBuffer();
-
-      if (identity) {
-        zip.file(t.file, npzBuf);
-      } else {
-        pyodide.FS.writeFile("/tmp/input.npz", new Uint8Array(npzBuf));
-        const npyBytes = await pyodide.runPythonAsync(collapseExpr);
-        const fname = `compton_sigma_T${String(t.index).padStart(3, "0")}_${nCoarseGroups}g_${nA}a.npy`;
-        zip.file(fname, npyBytes.toJs());
-      }
-      showProgress(
-        Math.round(((i + 1) / total) * 90),
-        `${identity ? "Fetching" : "Processing"} ${i + 1}/${total}\u2026`
-      );
+      pyodide.FS.writeFile("/tmp/input.npz", new Uint8Array(npzBuf));
+      const arr = await pyodide.runPythonAsync(buildCollapseToArrayCall(energyBounds, angleInfo));
+      allArrays.push(Array.from(arr.toJs({ create_proxies: false })));
+      showProgress(Math.round(((i + 1) / total) * 85), `Processing ${i + 1}/${total}\u2026`);
     }
 
-    showProgress(92, "Compressing ZIP\u2026");
-    const blob = await zip.generateAsync({ type: "blob" });
+    showProgress(87, "Building 4D array\u2026");
+    const npyBytes = await pyodide.runPythonAsync(`
+import numpy as np, io
+_data = ${JSON.stringify(allArrays)}
+_stacked = np.array(_data, dtype=np.float64).reshape(${total}, ${nCoarseGroups}, ${nCoarseGroups}, ${nA})
+_buf = io.BytesIO()
+np.save(_buf, _stacked)
+_buf.getvalue()
+`);
 
-    showProgress(98, "Preparing download\u2026");
+    showProgress(95, "Preparing download\u2026");
+    const blob = new Blob([npyBytes.toJs()], { type: "application/octet-stream" });
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
-    a.download = identity
-      ? "compton_all_temperatures_raw.zip"
-      : `compton_all_temperatures_${nCoarseGroups}g_${nA}a.zip`;
+    a.download = `compton_sigma_all_${total}T_${nCoarseGroups}g_${nA}a.npy`;
     document.body.appendChild(a);
     a.click();
     a.remove();
@@ -467,6 +779,65 @@ async function handleDownloadAll() {
   } finally {
     updateButtonStates();
   }
+}
+
+/* ── Metadata download ─────────────────────────────────── */
+
+async function handleDownloadMetadata() {
+  const temps = getSelectedTemperatures();
+  if (!temps || !pyodide) return;
+
+  const energyBounds = getCurrentEnergyBoundaries();
+  if (!energyBounds) return;
+  const angleBounds = getAngleBoundariesArray();
+  if (!angleBounds) return;
+
+  btnDownloadMetadata.disabled = true;
+
+  try {
+    // Generate temperatures.npy
+    const tempBytes = await pyodide.runPythonAsync(`
+import numpy as np, io
+_buf = io.BytesIO()
+np.save(_buf, np.array([${temps.join(",")}], dtype=np.float64))
+_buf.getvalue()
+`);
+    downloadBlob(tempBytes.toJs(), "temperatures.npy");
+
+    // Generate energy_boundaries_keV.npy
+    const energyBytes = await pyodide.runPythonAsync(`
+import numpy as np, io
+_buf = io.BytesIO()
+np.save(_buf, np.array([${energyBounds.join(",")}], dtype=np.float64))
+_buf.getvalue()
+`);
+    downloadBlob(energyBytes.toJs(), "energy_boundaries_keV.npy");
+
+    // Generate angle_boundaries_xi.npy
+    const angleBytes = await pyodide.runPythonAsync(`
+import numpy as np, io
+_buf = io.BytesIO()
+np.save(_buf, np.array([${angleBounds.join(",")}], dtype=np.float64))
+_buf.getvalue()
+`);
+    downloadBlob(angleBytes.toJs(), "angle_boundaries_xi.npy");
+  } catch (err) {
+    console.error("Metadata download error:", err);
+  } finally {
+    updateButtonStates();
+  }
+}
+
+function downloadBlob(data, filename) {
+  const blob = new Blob([data], { type: "application/octet-stream" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(url);
 }
 
 /* ── Initialization ────────────────────────────────────── */
@@ -503,7 +874,7 @@ async function loadManifest() {
     `${manifest.temperatures.length} temperatures (\\(${tLoTex}\\) \u2013 \\(${tHiTex}\\) K, log-spaced)`;
   if (window.renderMathInElement) renderMathInElement(gridSummary, {delimiters:[{left:'$$',right:'$$',display:true},{left:'\\(',right:'\\)',display:false}]});
 
-  tempSelect.innerHTML = '<option value="">-- select temperature --</option>';
+  tempSelect.innerHTML = "";
   for (const t of manifest.temperatures) {
     t._index = t.index;
     const opt = document.createElement("option");

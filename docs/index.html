@@ -78,10 +78,24 @@
   <section class="card">
     <div class="card-title">Temperature</div>
     <hr>
-    <label for="temperature-select">Select temperature:</label>
-    <select id="temperature-select" disabled>
+    <label for="temperature-select">Select temperature(s):</label>
+    <select id="temperature-select" multiple size="8" disabled>
       <option value="">Loading&hellip;</option>
     </select>
+    <div class="hint" id="temperature-hint">Hold Ctrl/Cmd to select multiple temperatures.</div>
+
+    <label class="checkbox-row" id="custom-temperature-toggle">
+      <input type="checkbox" id="use-custom-temperature">
+      Use custom temperature
+    </label>
+
+    <div id="temperature-custom" style="display:none; margin-top:0.75rem;">
+      <label for="custom-temperature-input">Enter temperatures in Kelvin (space-separated):</label>
+      <textarea id="custom-temperature-input" rows="2"
+                placeholder="e.g. 5000 1e6 2.5e7"></textarea>
+      <div class="hint" id="custom-temperature-hint">Custom values are interpolated in log-space between stored grid points.</div>
+      <div class="hint" id="custom-temperature-error"></div>
+    </div>
   </section>
 
   <!-- ── Energy group grid ───────────────────────────── -->
@@ -150,8 +164,15 @@
       Compute &amp; Download (.npy)
     </button>
 
+    <div class="metadata-download-section">
+      <button class="btn-metadata" id="btn-download-metadata" disabled>
+        Download Metadata (.npy)
+      </button>
+      <div class="hint">Downloads temperature, energy boundary, and angle boundary arrays.</div>
+    </div>
+
     <div class="bulk-download-section">
-      <div class="bulk-download-label">Bulk Download (all temperatures)</div>
+      <div class="bulk-download-label">Bulk Download (all 64 stored temperatures)</div>
       <div class="bulk-download-buttons">
         <button class="btn-bulk" id="btn-download-all" disabled>
           Download All
@@ -195,8 +216,15 @@
           than custom energy grids.
         </p>
         <p>
+          <strong>Temperature interpolation:</strong> When a custom temperature
+          is specified that does not match a stored grid point, the matrix is
+          computed by linear interpolation in log-temperature space between the
+          two nearest stored temperatures. The 64 stored temperatures are
+          log-spaced, so adjacent points have a ratio of approximately 1.25.
+        </p>
+        <p>
           For the best accuracy, use the auto-generated log-spaced
-          boundaries, which always coincide with the stored grid.
+          boundaries and select stored temperature values from the dropdown.
         </p>
       </div>
     </div>
@@ -218,25 +246,35 @@
         <div class="code-block">
 import numpy as np<br>
 <br>
-# Multiple energy groups and angle bins &rarr; 3D array<br>
+# Multiple temperatures, energy groups, and angle bins &rarr; 4D array<br>
+sigma = np.load("compton_sigma_3T_16g_10a.npy")<br>
+print(sigma.shape)&nbsp;&nbsp; # (3, 16, 16, 10)<br>
+# sigma[temperature, g_in, g_out, angle_bin]<br>
+<br>
+# Single temperature &rarr; falls back to 3D array<br>
 sigma = np.load("compton_sigma_T053_16g_10a.npy")<br>
 print(sigma.shape)&nbsp;&nbsp; # (16, 16, 10)<br>
 # sigma[g_in, g_out, angle_bin]<br>
 <br>
-# 1 angle bin &rarr; 2D matrix<br>
+# 1 angle bin, single temperature &rarr; 2D matrix<br>
 sigma = np.load("compton_sigma_T053_16g_1a.npy")<br>
 print(sigma.shape)&nbsp;&nbsp; # (16, 16)<br>
 # sigma[g_in, g_out]<br>
 <br>
-# 1 energy group &rarr; 1D angle array<br>
+# 1 energy group, single temperature &rarr; 1D angle array<br>
 sigma = np.load("compton_sigma_T053_1g_10a.npy")<br>
 print(sigma.shape)&nbsp;&nbsp; # (10,)<br>
 # sigma[angle_bin]<br>
 <br>
-# 1 energy group, 1 angle bin &rarr; scalar<br>
+# 1 energy group, 1 angle bin, single temperature &rarr; scalar<br>
 sigma = np.load("compton_sigma_T053_1g_1a.npy")<br>
 print(sigma.shape)&nbsp;&nbsp; # ()<br>
-print(float(sigma))
+print(float(sigma))<br>
+<br>
+# Load metadata arrays<br>
+temps = np.load("temperatures.npy")&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; # (nT,) in Kelvin<br>
+energies = np.load("energy_boundaries_keV.npy")&nbsp; # (nG+1,)<br>
+angles = np.load("angle_boundaries_xi.npy")&nbsp;&nbsp;&nbsp;&nbsp; # (nA+1,)
         </div>
       </div>
     </div>
