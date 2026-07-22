@@ -207,6 +207,22 @@ select {
   appearance: auto;
 }
 
+select[multiple] {
+  height: auto;
+  min-height: 160px;
+  padding: 0.25rem;
+}
+
+select[multiple] option {
+  padding: 0.3rem 0.5rem;
+  border-radius: 3px;
+}
+
+select[multiple] option:checked {
+  background: var(--accent);
+  color: #fff;
+}
+
 input[type="number"] {
   width: 120px;
 }
@@ -422,6 +438,37 @@ textarea {
 }
 
 /* ── Bulk download ─────────────────────────────────────── */
+
+.metadata-download-section {
+  margin-top: 1rem;
+  padding-top: 1rem;
+  border-top: 1px solid var(--border);
+}
+
+.btn-metadata {
+  display: block;
+  width: 100%;
+  padding: 0.6rem 1rem;
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: #fff;
+  background: var(--accent);
+  border: none;
+  border-radius: var(--radius);
+  cursor: pointer;
+  transition: background 0.15s, box-shadow 0.15s, opacity 0.15s;
+  letter-spacing: 0.01em;
+}
+
+.btn-metadata:hover:not(:disabled) {
+  background: var(--accent-hover);
+  box-shadow: var(--shadow-md);
+}
+
+.btn-metadata:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
 
 .bulk-download-section {
   margin-top: 1.25rem;
