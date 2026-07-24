@@ -1,6 +1,5 @@
 external/
-output/mc_tables/
-output/plots/
+output/
 logs/
 __pycache__/
 *.pyc
