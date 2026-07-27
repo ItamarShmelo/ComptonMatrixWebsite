@@ -521,7 +521,7 @@ async function handleDownload() {
     async function getCollapsedForStoredIndex(idx) {
       if (collapseCache.has(idx)) return collapseCache.get(idx);
       const entry = manifest.temperatures[idx];
-      const resp = await fetch(`data/${entry.file}`);
+      const resp = await fetch(`data/uniform/${entry.file}`);
       if (!resp.ok) throw new Error(`Failed to fetch ${entry.file}: ${resp.status}`);
       const npzBuf = await resp.arrayBuffer();
       pyodide.FS.writeFile("/tmp/input.npz", new Uint8Array(npzBuf));
@@ -567,8 +567,8 @@ _hi = np.array(${JSON.stringify(Array.from(hiData))}).reshape(${nCoarseGroups}, 
         } else {
           // Use collapse_interp with file I/O
           const [respLo, respHi] = await Promise.all([
-            fetch(`data/${entryLo.file}`),
-            fetch(`data/${entryHi.file}`),
+            fetch(`data/uniform/${entryLo.file}`),
+            fetch(`data/uniform/${entryHi.file}`),
           ]);
           if (!respLo.ok) throw new Error(`Failed to fetch ${entryLo.file}`);
           if (!respHi.ok) throw new Error(`Failed to fetch ${entryHi.file}`);
@@ -705,7 +705,7 @@ async function handleDownloadAll() {
       const zip = new JSZip();
       for (let i = 0; i < total; i++) {
         const t = manifest.temperatures[i];
-        const resp = await fetch(`data/${t.file}`);
+        const resp = await fetch(`data/uniform/${t.file}`);
         if (!resp.ok) throw new Error(`Failed to fetch ${t.file}: ${resp.status}`);
         const npzBuf = await resp.arrayBuffer();
         zip.file(t.file, npzBuf);
@@ -740,7 +740,7 @@ async function handleDownloadAll() {
     const allArrays = [];
     for (let i = 0; i < total; i++) {
       const t = manifest.temperatures[i];
-      const resp = await fetch(`data/${t.file}`);
+      const resp = await fetch(`data/uniform/${t.file}`);
       if (!resp.ok) throw new Error(`Failed to fetch ${t.file}: ${resp.status}`);
       const npzBuf = await resp.arrayBuffer();
       pyodide.FS.writeFile("/tmp/input.npz", new Uint8Array(npzBuf));
@@ -843,7 +843,7 @@ function downloadBlob(data, filename) {
 /* ── Initialization ────────────────────────────────────── */
 
 async function loadManifest() {
-  const resp = await fetch("data/manifest.json");
+  const resp = await fetch("data/uniform/manifest.json");
   manifest = await resp.json();
 
   fineBoundaries = new Float64Array(manifest.boundaries_keV);
