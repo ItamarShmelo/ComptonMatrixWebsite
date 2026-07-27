@@ -199,21 +199,31 @@
       <div class="info-text">
         <p>
           The data is stored on a fine grid of 128 log-spaced energy groups
-          and 100 uniform angle bins. Collapsing to a coarser grid is
-          <strong>exact</strong> when the requested boundaries coincide with
-          the stored fine-grid boundaries.
+          and 100 uniform angle bins with uniform energy weighting.
+          Collapsing to a coarser grid is <strong>exact</strong> when the
+          requested boundaries coincide with the stored fine-grid boundaries.
         </p>
         <p>
-          When custom energy boundaries fall <em>between</em> fine-grid
-          points, the code splits the affected fine groups proportionally
-          by width (linear interpolation). This introduces a few-percent
-          error on the dominant matrix elements, typically &le;&thinsp;5&ndash;6%
-          relative error.
+          <strong>Boundary straddling:</strong> When a fine output energy
+          group straddles a coarse boundary, the Compton kinematic formula
+          \(E' = E/(1 + E/m_e c^2\,(1 - \cos\theta))\) determines which
+          coarse output group receives each angle bin&rsquo;s contribution,
+          using the effective input energy of the overlap region rather than
+          a simple width-based fractional split.
         </p>
         <p>
-          Since the angle bin resolution is finer than the energy group
-          resolution, custom angle grids have less interpolation error
-          than custom energy grids.
+          <strong>Uniform weighting:</strong> With uniform (flat) spectral
+          weight, a sub-group minmod-limited linear reconstruction estimates
+          the overlap-specific cross-section for straddling input groups.
+          At high temperatures the output is split by overlap-fraction
+          weighting; at low temperatures kinematic assignment via the Compton
+          formula is used.  Typical relative error on dominant matrix elements
+          is&nbsp;&le;&thinsp;5% for non-aligned boundaries.
+        </p>
+        <p>
+          Angle bin resolution is finer than the energy group resolution, so
+          custom angle grids have less interpolation error than custom energy
+          grids.
         </p>
         <p>
           <strong>Temperature interpolation:</strong> When a custom temperature
