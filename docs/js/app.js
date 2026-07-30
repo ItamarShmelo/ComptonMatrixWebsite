@@ -427,20 +427,6 @@ function hideProgress() {
 
 /* ── Collapse call builders ────────────────────────────── */
 
-function buildCollapseToArrayCall(energyBounds, angleInfo) {
-  const anglePyArg = angleInfo.boundaries
-    ? `angle_boundaries=[${angleInfo.boundaries.join(",")}]`
-    : `n_angle_bins=${angleInfo.count}`;
-  return `_collapse_to_array(\n    open("/tmp/input.npz", "rb").read(),\n    [${energyBounds.join(",")}],\n    ${anglePyArg},\n).ravel()`;
-}
-
-function buildCollapseInterpCall(energyBounds, angleInfo, T_lo, T_hi, T_target) {
-  const anglePyArg = angleInfo.boundaries
-    ? `angle_boundaries=[${angleInfo.boundaries.join(",")}]`
-    : `n_angle_bins=${angleInfo.count}`;
-  return `collapse_interp(\n    open("/tmp/input_lo.npz", "rb").read(),\n    open("/tmp/input_hi.npz", "rb").read(),\n    ${T_lo}, ${T_hi}, ${T_target},\n    [${energyBounds.join(",")}],\n    ${anglePyArg},\n).ravel()`;
-}
-
 function isIdentityGrid(energyBounds, angleInfo) {
   if (angleInfo.boundaries) return false;
   if (angleInfo.count !== nFineAngleBins) return false;
@@ -464,109 +450,92 @@ async function handleDownload() {
   const nCoarseGroups = energyBounds.length - 1;
   const nA = getAngleBinCount();
   const nT = temps.length;
+  const identity = isIdentityGrid(energyBounds, angleInfo);
 
   btnDownload.disabled = true;
   showProgress(5, "Processing\u2026");
 
   try {
-    const collapseCache = new Map();
+    const anglePyArg = angleInfo.boundaries
+      ? `angle_boundaries=[${angleInfo.boundaries.join(",")}]`
+      : `n_angle_bins=${angleInfo.count}`;
+    const energyPyList = `[${energyBounds.join(",")}]`;
 
-    async function getCollapsedForStoredIndex(idx) {
-      if (collapseCache.has(idx)) return collapseCache.get(idx);
-      const entry = manifest.temperatures[idx];
-      const resp = await fetch(`data/uniform/${entry.file}`);
-      if (!resp.ok) throw new Error(`Failed to fetch ${entry.file}: ${resp.status}`);
-      const npzBuf = await resp.arrayBuffer();
-      pyodide.FS.writeFile("/tmp/input.npz", new Uint8Array(npzBuf));
-      const arr = await pyodide.runPythonAsync(buildCollapseToArrayCall(energyBounds, angleInfo));
-      const result = arr.toJs({ create_proxies: false });
-      collapseCache.set(idx, result);
-      return result;
-    }
+    await pyodide.runPythonAsync("_dl_results = []");
+    const fetchedIndices = new Set();
 
-    const arrays = [];
     for (let i = 0; i < nT; i++) {
       showProgress(5 + Math.round((i / nT) * 80), `Processing temperature ${i + 1}/${nT}\u2026`);
       const T = temps[i];
       const bracket = findBracketingTemps(T);
 
       if (bracket.exact) {
-        arrays.push(await getCollapsedForStoredIndex(bracket.lo));
+        const entry = manifest.temperatures[bracket.lo];
+        if (!fetchedIndices.has(bracket.lo)) {
+          const resp = await fetch(`data/uniform/${entry.file}`);
+          if (!resp.ok) throw new Error(`Failed to fetch ${entry.file}: ${resp.status}`);
+          pyodide.FS.writeFile("/tmp/input.npz", new Uint8Array(await resp.arrayBuffer()));
+          fetchedIndices.add(bracket.lo);
+        }
+        if (identity) {
+          await pyodide.runPythonAsync(`
+import numpy as np, io
+_dl_results.append(np.load(io.BytesIO(open("/tmp/input.npz","rb").read()))["sigma_matrix"])
+`);
+        } else {
+          await pyodide.runPythonAsync(
+            `_dl_results.append(_collapse_to_array(\n    open("/tmp/input.npz","rb").read(),\n    ${energyPyList},\n    ${anglePyArg},\n))`
+          );
+        }
       } else {
         const entryLo = manifest.temperatures[bracket.lo];
         const entryHi = manifest.temperatures[bracket.hi];
-        let loData = collapseCache.get(bracket.lo);
-        let hiData = collapseCache.get(bracket.hi);
+        const [respLo, respHi] = await Promise.all([
+          fetch(`data/uniform/${entryLo.file}`),
+          fetch(`data/uniform/${entryHi.file}`),
+        ]);
+        if (!respLo.ok) throw new Error(`Failed to fetch ${entryLo.file}`);
+        if (!respHi.ok) throw new Error(`Failed to fetch ${entryHi.file}`);
+        const [bufLo, bufHi] = await Promise.all([respLo.arrayBuffer(), respHi.arrayBuffer()]);
+        pyodide.FS.writeFile("/tmp/input_lo.npz", new Uint8Array(bufLo));
+        pyodide.FS.writeFile("/tmp/input_hi.npz", new Uint8Array(bufHi));
 
-        if (loData && hiData) {
-          const alpha = (Math.log(T) - Math.log(entryLo.temperature_K)) /
-            (Math.log(entryHi.temperature_K) - Math.log(entryLo.temperature_K));
-          const interpResult = await pyodide.runPythonAsync(`
-import numpy as np
-_lo = np.array(${JSON.stringify(Array.from(loData))}).reshape(${nCoarseGroups}, ${nCoarseGroups}, ${nA})
-_hi = np.array(${JSON.stringify(Array.from(hiData))}).reshape(${nCoarseGroups}, ${nCoarseGroups}, ${nA})
-(1.0 - ${alpha}) * _lo + ${alpha} * _hi
+        if (identity) {
+          await pyodide.runPythonAsync(`
+import numpy as np, io
+_lo = np.load(io.BytesIO(open("/tmp/input_lo.npz","rb").read()))["sigma_matrix"]
+_hi = np.load(io.BytesIO(open("/tmp/input_hi.npz","rb").read()))["sigma_matrix"]
+_alpha = (np.log(${T}) - np.log(${entryLo.temperature_K})) / (np.log(${entryHi.temperature_K}) - np.log(${entryLo.temperature_K}))
+_dl_results.append((1.0 - _alpha) * _lo + _alpha * _hi)
 `);
-          arrays.push(interpResult.toJs({ create_proxies: false }));
         } else {
-          const [respLo, respHi] = await Promise.all([
-            fetch(`data/uniform/${entryLo.file}`),
-            fetch(`data/uniform/${entryHi.file}`),
-          ]);
-          if (!respLo.ok) throw new Error(`Failed to fetch ${entryLo.file}`);
-          if (!respHi.ok) throw new Error(`Failed to fetch ${entryHi.file}`);
-          const [bufLo, bufHi] = await Promise.all([respLo.arrayBuffer(), respHi.arrayBuffer()]);
-          pyodide.FS.writeFile("/tmp/input_lo.npz", new Uint8Array(bufLo));
-          pyodide.FS.writeFile("/tmp/input_hi.npz", new Uint8Array(bufHi));
-          const interpArr = await pyodide.runPythonAsync(
-            buildCollapseInterpCall(energyBounds, angleInfo, entryLo.temperature_K, entryHi.temperature_K, T)
+          await pyodide.runPythonAsync(
+            `_dl_results.append(collapse_interp(\n    open("/tmp/input_lo.npz","rb").read(),\n    open("/tmp/input_hi.npz","rb").read(),\n    ${entryLo.temperature_K}, ${entryHi.temperature_K}, ${T},\n    ${energyPyList},\n    ${anglePyArg},\n))`
           );
-          arrays.push(interpArr.toJs({ create_proxies: false }));
-
-          if (!collapseCache.has(bracket.lo)) {
-            pyodide.FS.writeFile("/tmp/input.npz", new Uint8Array(bufLo));
-            const loArr = await pyodide.runPythonAsync(buildCollapseToArrayCall(energyBounds, angleInfo));
-            collapseCache.set(bracket.lo, loArr.toJs({ create_proxies: false }));
-          }
-          if (!collapseCache.has(bracket.hi)) {
-            pyodide.FS.writeFile("/tmp/input.npz", new Uint8Array(bufHi));
-            const hiArr = await pyodide.runPythonAsync(buildCollapseToArrayCall(energyBounds, angleInfo));
-            collapseCache.set(bracket.hi, hiArr.toJs({ create_proxies: false }));
-          }
         }
       }
     }
 
-    showProgress(88, "Building output array\u2026");
+    showProgress(88, "Building output file\u2026");
 
-    let npyBytes;
-    if (nT === 1) {
-      const flatData = JSON.stringify(Array.from(arrays[0]));
-      npyBytes = await pyodide.runPythonAsync(`
+    const npyBytes = await pyodide.runPythonAsync(`
 import numpy as np, io
-_arr = np.array(${flatData}).reshape(${nCoarseGroups}, ${nCoarseGroups}, ${nA})
-N, _, K = _arr.shape
-if N == 1 and K == 1:
-    _arr = _arr.ravel()[0]
-elif N == 1:
-    _arr = _arr[0, 0, :]
-elif K == 1:
-    _arr = _arr[:, :, 0]
+if len(_dl_results) == 1:
+    _arr = _dl_results[0]
+    N, _, K = _arr.shape
+    if N == 1 and K == 1:
+        _arr = _arr.ravel()[0]
+    elif N == 1:
+        _arr = _arr[0, 0, :]
+    elif K == 1:
+        _arr = _arr[:, :, 0]
+else:
+    _arr = np.stack(_dl_results, axis=0)
 _buf = io.BytesIO()
 np.save(_buf, _arr)
+del _dl_results
 _buf.getvalue()
 `);
-    } else {
-      const allFlat = arrays.map((a) => Array.from(a));
-      npyBytes = await pyodide.runPythonAsync(`
-import numpy as np, io
-_data = ${JSON.stringify(allFlat)}
-_stacked = np.array(_data, dtype=np.float64).reshape(${nT}, ${nCoarseGroups}, ${nCoarseGroups}, ${nA})
-_buf = io.BytesIO()
-np.save(_buf, _stacked)
-_buf.getvalue()
-`);
-    }
 
     showProgress(95, "Preparing download\u2026");
     const blob = new Blob([npyBytes.toJs()], { type: "application/octet-stream" });
@@ -641,23 +610,24 @@ async function handleDownloadAll() {
 
   showProgress(0, `Processing 0/${total}\u2026`);
   try {
-    const allArrays = [];
+    await pyodide.runPythonAsync("_dl_all_results = []");
     for (let i = 0; i < total; i++) {
       const t = manifest.temperatures[i];
       const resp = await fetch(`data/uniform/${t.file}`);
       if (!resp.ok) throw new Error(`Failed to fetch ${t.file}: ${resp.status}`);
       pyodide.FS.writeFile("/tmp/input.npz", new Uint8Array(await resp.arrayBuffer()));
-      const arr = await pyodide.runPythonAsync(buildCollapseToArrayCall(energyBounds, angleInfo));
-      allArrays.push(Array.from(arr.toJs({ create_proxies: false })));
+      await pyodide.runPythonAsync(
+        `_dl_all_results.append(_collapse_to_array(\n    open("/tmp/input.npz","rb").read(),\n    [${energyBounds.join(",")}],\n    ${angleInfo.boundaries ? `angle_boundaries=[${angleInfo.boundaries.join(",")}]` : `n_angle_bins=${angleInfo.count}`},\n))`
+      );
       showProgress(Math.round(((i + 1) / total) * 85), `Processing ${i + 1}/${total}\u2026`);
     }
     showProgress(87, "Building 4D array\u2026");
     const npyBytes = await pyodide.runPythonAsync(`
 import numpy as np, io
-_data = ${JSON.stringify(allArrays)}
-_stacked = np.array(_data, dtype=np.float64).reshape(${total}, ${nCoarseGroups}, ${nCoarseGroups}, ${nA})
+_stacked = np.stack(_dl_all_results, axis=0)
 _buf = io.BytesIO()
 np.save(_buf, _stacked)
+del _dl_all_results
 _buf.getvalue()
 `);
     const blob = new Blob([npyBytes.toJs()], { type: "application/octet-stream" });
