@@ -1,303 +1,541 @@
-<!DOCTYPE html>
-<html lang="en">
+<!doctype html>
+<html lang="en" data-theme="dark">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Compton Scattering Matrix Database</title>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="MACE: Multigroup-Multiangle Astrophysical Compton-Scattering Evaluator. Thermal Compton-scattering tables for multigroup, multiangle radiation transport.">
+  <meta name="theme-color" content="#080d17">
+  <title>MACE — Multigroup-Multiangle Astrophysical Compton-Scattering Evaluator</title>
   <link rel="stylesheet" href="css/style.css">
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.css">
   <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.js"></script>
   <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/contrib/auto-render.min.js"
     onload="renderMathInElement(document.body, {delimiters:[{left:'$$',right:'$$',display:true},{left:'\\(',right:'\\)',display:false}]});"></script>
+  <script src="js/theme.js" defer></script>
 </head>
 <body>
+  <a class="skip-link" href="#explore">Skip to matrix explorer</a>
 
-<!-- ── Header ──────────────────────────────────────────── -->
-<header class="site-header">
-  <h1>Compton Scattering Matrix Database</h1>
-  <p>Multigroup angle-resolved Compton scattering cross sections for radiation transport calculations</p>
-</header>
+  <header class="topbar">
+    <nav class="nav-shell" aria-label="Primary navigation">
+      <a class="brand" href="#home" aria-label="MACE home">
+        <span class="brand-mark" aria-hidden="true"><span></span></span>
+        <span class="brand-copy">
+          <strong>MACE</strong>
+          <small>Compton-Scattering Evaluator</small>
+        </span>
+      </a>
 
-<!-- ── Pyodide loading banner ──────────────────────────── -->
-<div id="loading-banner" class="loading-banner">
-  Loading Python runtime&hellip;
-</div>
-
-<div class="container">
-
-  <!-- ── About ───────────────────────────────────────── -->
-  <section class="card" id="about-card">
-    <div class="card-title collapsible" onclick="toggleCard('about-card')">
-      About This Database
-      <span class="toggle-icon">&#9660;</span>
-    </div>
-    <div class="card-body">
-      <hr>
-      <div class="about-text">
-        <p>
-          Pre-computed multigroup, angle-binned Compton scattering cross sections
-          evaluated using the
-          <a href="https://www.sciencedirect.com/science/article/pii/0022407386900506" target="_blank" rel="noopener">Kershaw&ndash;Prasad&ndash;Beason (1986)</a>
-          thermal Compton kernel via the
-          <a href="https://github.com/ItamarShmelo/ComptonMatrixExact" target="_blank" rel="noopener">ComptonMatrixExact</a>
-          deterministic solver with uniform energy weighting.
-        </p>
-        <p>
-          The multigroup, angle-binned scattering cross section is defined as:
-        </p>
-        <div class="formula-block">
-          $$\sigma\bigl(g \to g',\,[\xi_{i-\frac{1}{2}},\,\xi_{i+\frac{1}{2}}];\,T\bigr)
-          = \frac{2\pi \displaystyle\int_{\mathcal{E}_{g-\frac{1}{2}}}^{\mathcal{E}_{g+\frac{1}{2}}}
-          \int_{\mathcal{E}'_{g'-\frac{1}{2}}}^{\mathcal{E}'_{g'+\frac{1}{2}}}
-          \int_{\xi_{i-\frac{1}{2}}}^{\xi_{i+\frac{1}{2}}}
-          \mathcal{K}(\mathcal{E},\,\mathcal{E}',\,\xi;\,T)\;d\xi\;d\mathcal{E}'\;d\mathcal{E}}
-          {\mathcal{E}_{g+\frac{1}{2}} - \mathcal{E}_{g-\frac{1}{2}}}$$
-        </div>
-        <p>
-          where \(\mathcal{K}(\mathcal{E},\,\mathcal{E}',\,\xi;\,T)\) is the
-          thermal Compton scattering kernel,
-          \(\mathcal{E}\) and \(\mathcal{E}'\) are the incoming and outgoing
-          photon energies,
-          \(\xi = \cos\theta\) is the cosine of the scattering angle,
-          \(T\) is the electron temperature,
-          and the half-integer subscripts denote the group and bin boundaries.
-        </p>
-        <p>
-          Select a temperature and specify the desired coarse energy and angle grids
-          below. The browser will collapse the fine-grid data and produce a
-          downloadable <code>.npy</code> file.
-        </p>
-        <div class="grid-summary" id="grid-summary">
-          Loading grid information&hellip;
-        </div>
-      </div>
-    </div>
-  </section>
-
-  <!-- ── Temperature ─────────────────────────────────── -->
-  <section class="card">
-    <div class="card-title">Temperature</div>
-    <hr>
-    <label for="temperature-select">Select temperature(s):</label>
-    <select id="temperature-select" multiple size="10" disabled>
-      <option value="">Loading&hellip;</option>
-    </select>
-    <div class="hint" id="temperature-hint">Hold Ctrl/Cmd to select multiple temperatures.</div>
-
-    <label class="checkbox-row" id="custom-temperature-toggle">
-      <input type="checkbox" id="use-custom-temperature">
-      Use custom temperature
-    </label>
-
-    <div id="temperature-custom" style="display:none; margin-top:0.75rem;">
-      <label for="custom-temperature-input">Enter temperatures in Kelvin (space-separated):</label>
-      <textarea id="custom-temperature-input" rows="2"
-                placeholder="e.g. 5000 1e6 2.5e7"></textarea>
-      <div class="hint" id="custom-temperature-hint">Custom values are interpolated in log-space between stored grid points.</div>
-      <div class="hint" id="custom-temperature-error"></div>
-    </div>
-  </section>
-
-  <!-- ── Energy group grid ───────────────────────────── -->
-  <section class="card">
-    <div class="card-title">Energy Group Grid</div>
-    <hr>
-    <label for="n-groups">Number of output groups:</label>
-    <input type="number" id="n-groups" min="1" max="128" value="128">
-    <div class="hint" id="n-groups-hint"></div>
-
-    <div id="boundaries-auto">
-      <label style="margin-top:1rem;">Coarse boundaries (keV):</label>
-      <div class="boundaries-display" id="boundaries-display">
-        Loading&hellip;
-      </div>
-    </div>
-
-    <label class="checkbox-row" id="custom-boundaries-toggle">
-      <input type="checkbox" id="use-custom-boundaries">
-      Use custom boundaries instead
-    </label>
-
-    <div id="boundaries-custom" style="display:none; margin-top:0.75rem;">
-      <label for="custom-boundaries-input">Enter boundary values in keV (space-separated):</label>
-      <textarea id="custom-boundaries-input" rows="3"
-                placeholder="e.g. 1e-5 0.001 0.1 10 300"></textarea>
-      <div class="hint" id="custom-boundaries-error"></div>
-    </div>
-  </section>
-
-  <!-- ── Angle grid ──────────────────────────────────── -->
-  <section class="card">
-    <div class="card-title">Scattering Angle Grid</div>
-    <hr>
-    <label for="n-angles">Number of output angle bins:</label>
-    <input type="number" id="n-angles" min="1" value="100">
-    <div class="hint" id="n-angles-hint"></div>
-    <div class="hint" id="angle-info"></div>
-
-    <label class="checkbox-row" id="custom-angle-boundaries-toggle">
-      <input type="checkbox" id="use-custom-angle-boundaries">
-      Use custom angle boundaries instead
-    </label>
-
-    <div id="angle-boundaries-custom" style="display:none; margin-top:0.75rem;">
-      <label for="custom-angle-input">Enter &xi; = cos&theta; boundary values (space-separated, within [&minus;1, 1]):</label>
-      <textarea id="custom-angle-input" rows="3"
-                placeholder="e.g. -1 -0.5 0 0.5 1"></textarea>
-      <div class="hint" id="custom-angle-error"></div>
-    </div>
-  </section>
-
-  <!-- ── Output summary & download ───────────────────── -->
-  <section class="card">
-    <div class="card-title">Output Summary</div>
-    <hr>
-    <dl class="summary-grid">
-      <dt>Output matrix shape:</dt>
-      <dd id="summary-shape">128 &times; 128 &times; 100</dd>
-      <dt>Axes:</dt>
-      <dd id="summary-axes">[incoming group] &times; [outgoing group] &times; [angle bin]</dd>
-      <dt>Estimated file size:</dt>
-      <dd id="summary-size">&mdash;</dd>
-    </dl>
-    <button class="btn-download" id="btn-download" disabled>
-      Compute &amp; Download (.npy)
-    </button>
-
-    <div class="metadata-download-section">
-      <button class="btn-metadata" id="btn-download-metadata" disabled>
-        Download Metadata (.npy)
+      <button id="nav-toggle" class="nav-toggle" type="button" aria-expanded="false" aria-controls="primary-links">
+        <span></span><span></span><span></span>
+        <span class="sr-only">Toggle navigation</span>
       </button>
-      <div class="hint">Downloads temperature, energy boundary, and angle boundary arrays.</div>
-    </div>
 
-    <div class="bulk-download-section">
-      <div class="bulk-download-label">Bulk Download (all 64 stored temperatures)</div>
-      <div class="bulk-download-buttons">
-        <button class="btn-bulk" id="btn-download-all" disabled>
-          Download All
-        </button>
+      <div id="primary-links" class="nav-links">
+        <a href="#explore">Explore</a>
+        <a href="#plots">Plots</a>
+        <a href="#methods">Methods</a>
+        <a href="#data">Data</a>
+        <a href="https://github.com/ItamarShmelo/ComptonMatrixExact" target="_blank" rel="noreferrer">ComptonMatrixExact</a>
       </div>
-    </div>
 
-    <div class="progress-container" id="progress-container">
-      <div class="progress-bar-bg">
-        <div class="progress-bar-fill" id="progress-bar"></div>
+      <button id="theme-toggle" class="icon-button" type="button" aria-label="Switch to light theme" title="Switch color theme">
+        <svg class="theme-icon theme-icon-sun" viewBox="0 0 24 24" aria-hidden="true">
+          <circle cx="12" cy="12" r="4"></circle>
+          <path d="M12 2v2M12 20v2M4.93 4.93l1.42 1.42M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.42-1.42M17.66 6.34l1.41-1.41"></path>
+        </svg>
+        <svg class="theme-icon theme-icon-moon" viewBox="0 0 24 24" aria-hidden="true">
+          <path d="M21 12.8A9 9 0 1 1 11.2 3 7 7 0 0 0 21 12.8Z"></path>
+        </svg>
+      </button>
+    </nav>
+  </header>
+
+  <main>
+    <section id="home" class="hero">
+      <div class="hero-shell">
+        <div class="hero-copy reveal">
+          <p class="eyebrow"><span></span> Thermal Compton scattering tables</p>
+          <h1>Multigroup, multiangle<br><span>Compton scattering matrices.</span></h1>
+          <p class="hero-identity">
+            <strong>MACE: Multigroup-Multiangle Astrophysical Compton-Scattering Evaluator</strong>
+            <span>
+              Thermal Compton-scattering tables for multigroup, multiangle
+              radiation transport
+            </span>
+          </p>
+          <p class="hero-lede">
+            Pre-computed scattering cross sections evaluated with the
+            Kershaw&ndash;Prasad&ndash;Beason thermal Compton kernel.
+            Select temperature, energy, and angle grids, then download
+            ready-to-use NumPy arrays for your transport code.
+          </p>
+          <div class="hero-actions">
+            <a class="button button-primary" href="#explore">
+              Start exploring
+              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m9 18 6-6-6-6"></path></svg>
+            </a>
+            <a class="button button-ghost" href="#methods">Learn more</a>
+          </div>
+        </div>
+
+        <aside class="hero-method-card reveal" aria-label="How the matrices were computed">
+          <h2>How the matrices were computed</h2>
+          <p>
+            The multigroup, angle-binned scattering cross sections are evaluated
+            deterministically using the
+            <strong>Kershaw&ndash;Prasad&ndash;Beason (1986)</strong> thermal
+            Compton kernel via the ComptonMatrixExact solver with uniform energy
+            weighting. The browser collapses fine-grid data to your custom
+            resolution on the fly.
+          </p>
+          <a
+            href="https://www.sciencedirect.com/science/article/pii/0022407386900506"
+            target="_blank"
+            rel="noreferrer"
+          >
+            Read the paper
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+              <path d="M14 4h6v6M20 4l-9 9M19 13v6a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V6a1 1 0 0 1 1-1h6"></path>
+            </svg>
+          </a>
+        </aside>
       </div>
-      <div class="progress-label" id="progress-label">Initializing&hellip;</div>
-    </div>
-  </section>
+    </section>
 
-  <!-- ── Accuracy notes ────────────────────────────── -->
-  <section class="card" id="accuracy-card">
-    <div class="card-title collapsible collapsed" onclick="toggleCard('accuracy-card')">
-      Accuracy Notes
-      <span class="toggle-icon">&#9660;</span>
-    </div>
-    <div class="card-body collapsed">
-      <hr>
-      <div class="info-text">
+    <section class="metric-strip reveal" aria-label="MACE dataset summary">
+      <article><span class="metric-icon">◎</span><div><strong>128</strong><small>Energy groups</small></div></article>
+      <article><span class="metric-icon">⌗</span><div><strong>100</strong><small>Angle bins</small></div></article>
+      <article><span class="metric-icon">∿</span><div><strong>64</strong><small>Temperatures</small></div></article>
+      <article><span class="metric-icon">↗</span><div><strong>Log-space</strong><small>Interpolation</small></div></article>
+      <article><span class="metric-icon">↓</span><div><strong>NPY</strong><small>NumPy output</small></div></article>
+    </section>
+
+    <section id="explore" class="section-shell workspace-section">
+      <div class="section-intro reveal">
+        <p class="eyebrow"><span></span> Interactive laboratory</p>
+        <h2>Build Compton scattering matrices for radiation transport.</h2>
         <p>
-          The data is stored on a fine grid of 128 log-spaced energy groups
-          and 100 uniform angle bins with uniform energy weighting.
-          Collapsing to a coarser grid is <strong>exact</strong> when the
-          requested boundaries coincide with the stored fine-grid boundaries.
-        </p>
-        <p>
-          <strong>Boundary straddling:</strong> When a fine output energy
-          group straddles a coarse boundary, the Compton kinematic formula
-          \(E' = E/(1 + E/m_e c^2\,(1 - \cos\theta))\) determines which
-          coarse output group receives each angle bin&rsquo;s contribution,
-          using the effective input energy of the overlap region rather than
-          a simple width-based fractional split.
-        </p>
-        <p>
-          <strong>Uniform weighting:</strong> With uniform (flat) spectral
-          weight, a sub-group minmod-limited linear reconstruction estimates
-          the overlap-specific cross-section for straddling input groups.
-          At high temperatures the output is split by overlap-fraction
-          weighting; at low temperatures kinematic assignment via the Compton
-          formula is used.  Typical relative error on dominant matrix elements
-          is&nbsp;&le;&thinsp;5% for non-aligned boundaries.
-        </p>
-        <p>
-          Angle bin resolution is finer than the energy group resolution, so
-          custom angle grids have less interpolation error than custom energy
-          grids.
-        </p>
-        <p>
-          <strong>Temperature interpolation:</strong> When a custom temperature
-          is specified that does not match a stored grid point, the matrix is
-          computed by linear interpolation in log-temperature space between the
-          two nearest stored temperatures. The 64 stored temperatures are
-          log-spaced, so adjacent points have a ratio of approximately 1.25.
-        </p>
-        <p>
-          For the best accuracy, use the auto-generated log-spaced
-          boundaries and select stored temperature values from the dropdown.
+          Configure temperature, energy group, and scattering angle grids.
+          MACE loads pre-computed fine-grid data and performs conservative
+          collapse and interpolation entirely in your browser.
         </p>
       </div>
-    </div>
-  </section>
 
-  <!-- ── What is .npy ────────────────────────────────── -->
-  <section class="card" id="npy-card">
-    <div class="card-title collapsible collapsed" onclick="toggleCard('npy-card')">
-      What is .npy?
-      <span class="toggle-icon">&#9660;</span>
-    </div>
-    <div class="card-body collapsed">
-      <hr>
-      <div class="info-text">
+      <div class="workspace-grid">
+        <!-- ── Download Instrument ──────────────────────── -->
+        <section class="instrument-card query-instrument reveal">
+          <div class="instrument-header">
+            <div>
+              <p class="panel-kicker">Matrix builder</p>
+              <h3>Download definition</h3>
+            </div>
+            <span class="live-badge"><i></i> Browser compute</span>
+          </div>
+
+          <div id="loading-message" class="status">Loading dataset metadata&hellip;</div>
+
+          <form id="download-form" hidden>
+            <div class="query-section">
+              <div class="section-number">01</div>
+              <div class="query-content">
+                <h4>Temperature</h4>
+                <div class="mode-row" role="radiogroup" aria-label="Temperature input mode">
+                  <label class="radio-label">
+                    <input type="radio" name="temp-mode" value="stored" checked>
+                    <span>Stored values</span>
+                  </label>
+                  <label class="radio-label">
+                    <input type="radio" name="temp-mode" value="custom">
+                    <span>Custom list</span>
+                  </label>
+                </div>
+                <div id="temp-stored-panel" class="mode-panel">
+                  <label>
+                    Select temperature(s)
+                    <select id="temperature-select" multiple size="8"></select>
+                  </label>
+                  <p class="help" id="temperature-hint">Hold Ctrl/Cmd to select multiple temperatures.</p>
+                </div>
+                <div id="temp-custom-panel" class="mode-panel" hidden>
+                  <label>
+                    Temperatures [K]
+                    <textarea id="custom-temperature-input" rows="3" placeholder="5000, 1e6, 2.5e7"></textarea>
+                  </label>
+                  <p class="help">Separate values with commas, spaces, or new lines. Interpolated in log-T.</p>
+                  <p class="help" id="custom-temperature-error"></p>
+                </div>
+              </div>
+            </div>
+
+            <div class="query-section">
+              <div class="section-number">02</div>
+              <div class="query-content">
+                <h4>Energy groups</h4>
+                <div class="mode-row" role="radiogroup" aria-label="Energy input mode">
+                  <label class="radio-label">
+                    <input type="radio" name="energy-mode" value="standard" checked>
+                    <span>Log-spaced groups</span>
+                  </label>
+                  <label class="radio-label">
+                    <input type="radio" name="energy-mode" value="custom">
+                    <span>Custom boundaries</span>
+                  </label>
+                </div>
+                <div id="energy-standard-panel" class="mode-panel">
+                  <div class="form-grid two-columns">
+                    <label>
+                      Number of output groups
+                      <input type="number" id="n-groups" min="1" max="128" value="128">
+                    </label>
+                    <div class="plot-group-range">
+                      <span>Hint</span>
+                      <strong id="n-groups-hint">&nbsp;</strong>
+                    </div>
+                  </div>
+                  <div id="boundaries-auto" style="margin-top: .6rem;">
+                    <label>Coarse boundaries (keV)</label>
+                    <div class="plot-group-range" style="margin-top: .3rem; max-height: 120px; overflow-y: auto;">
+                      <strong id="boundaries-display" style="font-size: .62rem; word-break: break-all;">Loading&hellip;</strong>
+                    </div>
+                  </div>
+                </div>
+                <div id="energy-custom-panel" class="mode-panel" hidden>
+                  <label>
+                    Energy boundaries [keV]
+                    <textarea id="custom-boundaries-input" rows="3" placeholder="1e-5, 0.001, 0.1, 10, 300"></textarea>
+                  </label>
+                  <p class="help">N+1 strictly increasing edges define N output groups.</p>
+                  <p class="help" id="custom-boundaries-error"></p>
+                </div>
+              </div>
+            </div>
+
+            <div class="query-section">
+              <div class="section-number">03</div>
+              <div class="query-content">
+                <h4>Scattering angle bins</h4>
+                <div class="mode-row" role="radiogroup" aria-label="Angle input mode">
+                  <label class="radio-label">
+                    <input type="radio" name="angle-mode" value="standard" checked>
+                    <span>Uniform bins</span>
+                  </label>
+                  <label class="radio-label">
+                    <input type="radio" name="angle-mode" value="custom">
+                    <span>Custom boundaries</span>
+                  </label>
+                </div>
+                <div id="angle-standard-panel" class="mode-panel">
+                  <div class="form-grid two-columns">
+                    <label>
+                      Number of angle bins
+                      <input type="number" id="n-angles" min="1" value="100">
+                    </label>
+                    <div class="plot-group-range">
+                      <span>Bin width</span>
+                      <strong id="angle-info">&nbsp;</strong>
+                    </div>
+                  </div>
+                  <p class="help" id="n-angles-hint"></p>
+                </div>
+                <div id="angle-custom-panel" class="mode-panel" hidden>
+                  <label>
+                    &xi; = cos &theta; boundaries
+                    <textarea id="custom-angle-input" rows="3" placeholder="-1, -0.5, 0, 0.5, 1"></textarea>
+                  </label>
+                  <p class="help">Values within [&minus;1, 1], strictly increasing.</p>
+                  <p class="help" id="custom-angle-error"></p>
+                </div>
+              </div>
+            </div>
+
+            <div class="summary-panel">
+              <p class="panel-kicker">Output summary</p>
+              <dl>
+                <div><dt>Shape</dt><dd id="summary-shape">&mdash;</dd></div>
+                <div><dt>Axes</dt><dd id="summary-axes">&mdash;</dd></div>
+                <div><dt>File size</dt><dd id="summary-size">&mdash;</dd></div>
+              </dl>
+            </div>
+
+            <div id="form-error" class="error" hidden></div>
+            <div class="button-row sticky-actions">
+              <button id="btn-download" type="button" disabled>
+                Compute &amp; Download
+                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v12M7 10l5 5 5-5M5 21h14"></path></svg>
+              </button>
+              <button id="btn-download-metadata" type="button" class="secondary" disabled>
+                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v12M7 10l5 5 5-5M5 21h14"></path></svg>
+                Metadata
+              </button>
+              <button id="btn-download-all" type="button" class="secondary" disabled>
+                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v12M7 10l5 5 5-5M5 21h14"></path></svg>
+                All 64 temps
+              </button>
+            </div>
+
+            <div id="progress-container" class="progress-section" hidden>
+              <div class="progress-bar-bg">
+                <div class="progress-bar-fill" id="progress-bar"></div>
+              </div>
+              <div class="progress-label" id="progress-label">Initializing&hellip;</div>
+            </div>
+          </form>
+        </section>
+
+        <!-- ── Plot Instrument ──────────────────────────── -->
+        <section id="plots" class="instrument-card plot-instrument reveal">
+          <div class="instrument-header">
+            <div>
+              <p class="panel-kicker">Scientific visualization</p>
+              <h3>Matrix explorer</h3>
+            </div>
+            <span class="live-badge purple"><i></i> Interactive</span>
+          </div>
+          <p class="panel-description">
+            Visualize the scattering matrix: outgoing energy spectra,
+            angular distributions, or full energy-transfer heatmaps
+            for any stored temperature.
+          </p>
+
+          <form id="plot-form" hidden>
+            <div class="form-grid two-columns plot-primary-grid">
+              <label>
+                Plot mode
+                <select id="plot-mode-select">
+                  <option value="ep-profile">E&prime; profile (outgoing spectrum)</option>
+                  <option value="xi-profile">&xi; profile (angular distribution)</option>
+                  <option value="matrix">E / E&prime; matrix (heatmap)</option>
+                </select>
+              </label>
+              <label>
+                Temperature
+                <select id="plot-temperature-select"></select>
+              </label>
+            </div>
+
+            <div id="plot-params-ep" class="mode-panel form-grid two-columns">
+              <label>
+                Incoming energy group (E)
+                <input id="plot-e-group" type="number" min="0" step="1" value="64">
+              </label>
+              <label>
+                Angle bin index (&xi;)
+                <input id="plot-xi-bin" type="number" min="0" step="1" value="50">
+              </label>
+            </div>
+
+            <div id="plot-params-xi" class="mode-panel form-grid two-columns" hidden>
+              <label>
+                Incoming energy group (E)
+                <input id="plot-e-group-xi" type="number" min="0" step="1" value="64">
+              </label>
+              <label>
+                Outgoing energy group (E&prime;)
+                <input id="plot-ep-group-xi" type="number" min="0" step="1" value="64">
+              </label>
+            </div>
+
+            <div id="plot-params-matrix" class="mode-panel" hidden>
+              <label>
+                Angle bin index (&xi;)
+                <input id="plot-xi-bin-matrix" type="number" min="0" step="1" value="50">
+              </label>
+            </div>
+
+            <div id="plot-scale-switches" class="scale-switches">
+              <label class="switch-label">
+                <input id="plot-log-x" type="checkbox" checked>
+                <span class="switch-track"><i></i></span>
+                <span><strong>Log X</strong><small>Horizontal scale</small></span>
+              </label>
+              <label class="switch-label">
+                <input id="plot-log-y" type="checkbox" checked>
+                <span class="switch-track"><i></i></span>
+                <span><strong>Log Y</strong><small>Vertical scale</small></span>
+              </label>
+            </div>
+
+            <div id="plot-group-info" class="plot-group-range" style="margin-bottom: .6rem;">
+              <span>Selection</span>
+              <strong id="plot-selection-info">&mdash;</strong>
+            </div>
+
+            <div id="plot-form-error" class="error" hidden></div>
+            <div class="button-row">
+              <button id="plot-button" type="button">
+                Draw plot
+                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 18 9 12l4 3 7-9"></path></svg>
+              </button>
+              <button id="plot-download-button" type="button" class="secondary" disabled>
+                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v12M7 10l5 5 5-5M5 21h14"></path></svg>
+                Download CSV
+              </button>
+            </div>
+          </form>
+
+          <div class="instrument-placeholder" id="plot-placeholder" aria-hidden="true">
+            <div class="mini-chart">
+              <span class="y-label">Cross section</span>
+              <div class="mini-grid"></div>
+              <svg viewBox="0 0 520 240" preserveAspectRatio="none">
+                <defs>
+                  <linearGradient id="mini-line" x1="0" x2="1">
+                    <stop offset="0" stop-color="#7557ff"></stop>
+                    <stop offset="0.55" stop-color="#ff4f78"></stop>
+                    <stop offset="1" stop-color="#ffad32"></stop>
+                  </linearGradient>
+                  <linearGradient id="mini-fill" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="0" stop-color="#ff4f78" stop-opacity=".32"></stop>
+                    <stop offset="1" stop-color="#7557ff" stop-opacity="0"></stop>
+                  </linearGradient>
+                </defs>
+                <path class="mini-area" d="M0 217 C52 210 60 176 107 180 C154 184 166 225 211 205 C258 184 252 73 308 105 C358 134 374 206 420 165 C462 128 474 54 520 64 L520 240 L0 240Z"></path>
+                <path class="mini-line" d="M0 217 C52 210 60 176 107 180 C154 184 166 225 211 205 C258 184 252 73 308 105 C358 134 374 206 420 165 C462 128 474 54 520 64"></path>
+              </svg>
+              <span class="x-label">Energy / angle</span>
+            </div>
+            <p>Your requested plot will appear here.</p>
+          </div>
+        </section>
+      </div>
+    </section>
+
+    <section id="plot-section" class="section-shell result-section" hidden>
+      <div class="instrument-card result-card">
+        <div class="section-heading">
+          <div>
+            <p class="panel-kicker">Visualization output</p>
+            <h2>Scattering matrix plot</h2>
+            <p id="plot-description"></p>
+          </div>
+        </div>
+        <div id="plot-chart" class="plot-chart" role="img" aria-label="Scattering matrix plot"></div>
+      </div>
+    </section>
+
+    <section id="methods" class="section-shell methods-section">
+      <div class="section-intro reveal">
+        <p class="eyebrow"><span></span> Physics and numerics</p>
+        <h2>Deterministic thermal Compton scattering.</h2>
         <p>
-          <code>.npy</code> is NumPy's native single-array binary format.
+          Every matrix element retains its physical meaning: the multigroup,
+          angle-binned cross section for photon energy transfer from group
+          \(g\) to group \(g'\) within scattering angle bin \([\xi_{i-1/2},\,\xi_{i+1/2}]\).
         </p>
-        <p>Load in Python:</p>
-        <div class="code-block">
-import numpy as np<br>
-<br>
-# Multiple temperatures, energy groups, and angle bins &rarr; 4D array<br>
-sigma = np.load("compton_sigma_3T_16g_10a.npy")<br>
-print(sigma.shape)&nbsp;&nbsp; # (3, 16, 16, 10)<br>
-# sigma[temperature, g_in, g_out, angle_bin]<br>
-<br>
-# Single temperature &rarr; falls back to 3D array<br>
-sigma = np.load("compton_sigma_T053_16g_10a.npy")<br>
-print(sigma.shape)&nbsp;&nbsp; # (16, 16, 10)<br>
-# sigma[g_in, g_out, angle_bin]<br>
-<br>
-# 1 angle bin, single temperature &rarr; 2D matrix<br>
-sigma = np.load("compton_sigma_T053_16g_1a.npy")<br>
-print(sigma.shape)&nbsp;&nbsp; # (16, 16)<br>
-# sigma[g_in, g_out]<br>
-<br>
-# 1 energy group, single temperature &rarr; 1D angle array<br>
-sigma = np.load("compton_sigma_T053_1g_10a.npy")<br>
-print(sigma.shape)&nbsp;&nbsp; # (10,)<br>
-# sigma[angle_bin]<br>
-<br>
-# 1 energy group, 1 angle bin, single temperature &rarr; scalar<br>
-sigma = np.load("compton_sigma_T053_1g_1a.npy")<br>
-print(sigma.shape)&nbsp;&nbsp; # ()<br>
-print(float(sigma))<br>
-<br>
-# Load metadata arrays<br>
-temps = np.load("temperatures.npy")&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; # (nT,) in Kelvin<br>
-energies = np.load("energy_boundaries_keV.npy")&nbsp; # (nG+1,)<br>
-angles = np.load("angle_boundaries_xi.npy")&nbsp;&nbsp;&nbsp;&nbsp; # (nA+1,)
+      </div>
+
+      <article class="calculation-provenance reveal">
+        <div class="provenance-mark" aria-hidden="true">KPB</div>
+        <div class="provenance-copy">
+          <p class="panel-kicker">Scattering kernel</p>
+          <h3>The Kershaw&ndash;Prasad&ndash;Beason thermal Compton kernel</h3>
+          <p>
+            The multigroup, angle-binned scattering cross section is defined as:
+          </p>
+          <p>
+            $$\sigma\bigl(g \to g',\,[\xi_{i-\frac{1}{2}},\,\xi_{i+\frac{1}{2}}];\,T\bigr)
+            = \frac{2\pi \displaystyle\int_{\mathcal{E}_{g-\frac{1}{2}}}^{\mathcal{E}_{g+\frac{1}{2}}}
+            \int_{\mathcal{E}'_{g'-\frac{1}{2}}}^{\mathcal{E}'_{g'+\frac{1}{2}}}
+            \int_{\xi_{i-\frac{1}{2}}}^{\xi_{i+\frac{1}{2}}}
+            \mathcal{K}\;d\xi\;d\mathcal{E}'\;d\mathcal{E}}
+            {\mathcal{E}_{g+\frac{1}{2}} - \mathcal{E}_{g-\frac{1}{2}}}$$
+          </p>
+          <p>
+            where \(\mathcal{K}(\mathcal{E},\,\mathcal{E}',\,\xi;\,T)\) is the
+            thermal Compton kernel,
+            \(\mathcal{E}\) and \(\mathcal{E}'\) are the incoming and outgoing
+            photon energies,
+            \(\xi = \cos\theta\) is the cosine of the scattering angle, and
+            \(T\) is the electron temperature.
+          </p>
+          <div class="help" id="grid-summary">Loading grid information&hellip;</div>
+        </div>
+        <a class="paper-reference" href="https://www.sciencedirect.com/science/article/pii/0022407386900506" target="_blank" rel="noreferrer">
+          <span>Method reference</span>
+          <strong>Kershaw, Prasad &amp; Beason (1986)</strong>
+          <small>Thermal Compton scattering kernel &middot; JQSRT 36(5)</small>
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M14 4h6v6M20 4l-9 9M19 13v6a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V6a1 1 0 0 1 1-1h6"></path></svg>
+        </a>
+      </article>
+
+      <div class="method-grid">
+        <article class="method-card reveal">
+          <span class="method-icon violet">&sigma;</span>
+          <h3>Multigroup cross section</h3>
+          <p>Energy- and angle-resolved cross sections on a 128 &times; 128 &times; 100 fine grid per temperature.</p>
+        </article>
+        <article class="method-card reveal">
+          <span class="method-icon coral">T</span>
+          <h3>Temperature coverage</h3>
+          <p>64 log-spaced temperatures from 1,000&nbsp;K to 10<sup>9</sup>&nbsp;K with log-space interpolation for custom values.</p>
+        </article>
+        <article class="method-card reveal">
+          <span class="method-icon orange">&#8628;</span>
+          <h3>Conservative collapse</h3>
+          <p>Minmod-limited reconstruction with kinematic output assignment for sub-group boundary straddling.</p>
+        </article>
+        <article class="method-card reveal">
+          <span class="method-icon cyan">.npy</span>
+          <h3>NumPy format</h3>
+          <p>Download as <code>.npy</code> arrays directly loadable with <code>numpy.load()</code>. Edge-case dimension reduction for scalar/1D/2D results.</p>
+        </article>
+      </div>
+
+      <div class="method-note reveal">
+        <span class="info-icon">i</span>
+        <div>
+          <p>
+            <strong>Accuracy:</strong> Collapsing to coarser grids is exact when
+            requested boundaries align with stored fine-grid boundaries.
+            For non-aligned boundaries, the Compton kinematic formula determines
+            output-group assignment; typical relative error on dominant matrix
+            elements is &le;&thinsp;5%.
+          </p>
+          <p style="margin-top: .5rem;">
+            <strong>Temperature interpolation:</strong> Custom temperatures are
+            interpolated linearly in log-T between the two nearest stored values
+            (adjacent stored temperatures have a ratio of &approx;1.25).
+          </p>
         </div>
       </div>
+    </section>
+
+    <section id="data" class="section-shell data-section reveal">
+      <div class="data-cta">
+        <div>
+          <p class="eyebrow"><span></span> Open and reproducible</p>
+          <h2>Compton scattering matrices for astrophysical transport.</h2>
+          <p>
+            MACE provides pre-computed multigroup, angle-resolved Compton scattering
+            cross sections for radiation-hydrodynamics codes. Configure the grids you
+            need and download ready-to-use NumPy arrays, or retrieve the source code
+            and generation scripts.
+          </p>
+        </div>
+        <div class="data-actions">
+          <a class="button button-primary" href="#explore">Build a matrix</a>
+          <a class="button button-ghost" href="https://github.com/ItamarShmelo/ComptonMatrixExact" target="_blank" rel="noreferrer">ComptonMatrixExact</a>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <footer>
+    <div class="footer-shell">
+      <a class="brand footer-brand" href="#home">
+        <span class="brand-mark" aria-hidden="true"><span></span></span>
+        <span class="brand-copy"><strong>MACE</strong><small>Compton-Scattering Evaluator</small></span>
+      </a>
+      <p>Thermal Compton-scattering tables for multigroup, multiangle radiation transport.</p>
+      <div class="footer-links">
+        <a href="#methods">Methods</a>
+        <a href="#data">Data</a>
+        <a href="https://github.com/ItamarShmelo/ComptonMatrixExact">ComptonMatrixExact</a>
+      </div>
     </div>
-  </section>
+  </footer>
 
-</div><!-- .container -->
-
-<!-- ── Footer ──────────────────────────────────────────── -->
-<footer class="site-footer">
-  Data generated with
-  <a href="https://github.com/ItamarShmelo/ComptonMatrixExact" target="_blank" rel="noopener">ComptonMatrixExact</a>
-</footer>
-
-<script src="js/app.js"></script>
+  <script type="module" src="js/app.js"></script>
 </body>
 </html>
