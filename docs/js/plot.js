@@ -55,8 +55,8 @@ function formatTickLabel(v, isLog) {
     if (Math.abs(v - Math.pow(10, e)) / v < 0.01) return `10${superscript(e)}`;
     return v.toExponential(1);
   }
-  if (Math.abs(v) < 1e-10) return "0";
-  if (Math.abs(v) >= 1e4 || (Math.abs(v) < 0.01 && v !== 0)) return v.toExponential(1);
+  if (v === 0) return "0";
+  if (Math.abs(v) >= 1e4 || Math.abs(v) < 0.01) return v.toExponential(1);
   const s = v.toPrecision(4);
   return parseFloat(s).toString();
 }
@@ -100,8 +100,9 @@ export function renderLinePlot(container, xVals, yVals, options = {}) {
   if (logX) {
     if (xMin === xMax) { xMin *= 0.5; xMax *= 2; }
   } else {
-    const pad = (xMax - xMin) * 0.05 || 0.5;
-    xMin -= pad; xMax += pad;
+    const xRange = xMax - xMin;
+    const xPad = xRange > 0 ? xRange * 0.05 : (Math.abs(xMax) * 0.1 || 0.5);
+    xMin -= xPad; xMax += xPad;
   }
   if (logY) {
     if (yMin === yMax) { yMin *= 0.5; yMax *= 2; }
@@ -109,8 +110,9 @@ export function renderLinePlot(container, xVals, yVals, options = {}) {
     yMin = Math.pow(10, Math.log10(yMin) - logRange * 0.05);
     yMax = Math.pow(10, Math.log10(yMax) + logRange * 0.05);
   } else {
-    const pad = (yMax - yMin) * 0.08 || 0.5;
-    yMin -= pad; yMax += pad;
+    const yRange = yMax - yMin;
+    const yPad = yRange > 0 ? yRange * 0.08 : (Math.abs(yMax) * 0.1 || 0.5);
+    yMin -= yPad; yMax += yPad;
   }
 
   function px(v) {

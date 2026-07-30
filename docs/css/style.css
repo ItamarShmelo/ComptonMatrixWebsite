@@ -562,6 +562,9 @@ button:disabled { cursor: wait; opacity: .5; transform: none !important; }
 .plot-group-range { min-height: 43px; padding: .55rem .7rem; display: grid; align-content: center; gap: .1rem; border: 1px solid var(--border); border-radius: 10px; background: var(--bg-elevated); }
 .plot-group-range span { color: var(--muted); font-size: .57rem; font-weight: 760; letter-spacing: .07em; text-transform: uppercase; }
 .plot-group-range strong { font-size: .7rem; overflow-wrap: anywhere; }
+.selection-boxes { display: grid; grid-template-columns: 1fr 1fr; gap: .6rem; }
+.plot-inline-desc { margin: .6rem 0 0; color: var(--muted); font-size: .75rem; }
+.selection-label { display: block; margin-bottom: .25rem; color: var(--muted); font-size: .62rem; font-weight: 650; letter-spacing: .04em; }
 .plot-summary-panel dl { grid-template-columns: repeat(3, minmax(0, 1fr)); }
 .instrument-placeholder { margin-top: 1rem; padding: 1rem; border: 1px solid var(--border); border-radius: 16px; background: var(--bg-elevated); }
 .instrument-placeholder > p { margin: .8rem 0 .1rem; color: var(--muted); font-size: .7rem; text-align: center; }
@@ -587,8 +590,8 @@ th:last-child, td:last-child { text-align: left; }
 code { padding: .11rem .32rem; border: 1px solid var(--border); border-radius: 5px; background: var(--surface-soft); color: #c6a7ff; font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: .88em; }
 html[data-theme="light"] code { color: #6135b7; }
 
-.plot-chart { width: 100%; min-height: 30rem; margin-top: 1rem; overflow-x: auto; border: 1px solid var(--border); border-radius: 16px; background: var(--bg-elevated); }
-.plot-svg { display: block; width: 100%; min-width: 44rem; height: auto; font-family: inherit; }
+.plot-chart { width: 100%; margin-top: .6rem; border: 1px solid var(--border); border-radius: 16px; background: var(--bg-elevated); overflow: hidden; }
+.plot-svg { display: block; width: 100%; height: auto; font-family: inherit; }
 .plot-background { fill: var(--bg-elevated); }
 .plot-grid-line { stroke: color-mix(in srgb, var(--muted) 18%, transparent); stroke-width: 1; vector-effect: non-scaling-stroke; }
 .plot-axis-line { stroke: var(--text-soft); stroke-width: 1.2; vector-effect: non-scaling-stroke; }

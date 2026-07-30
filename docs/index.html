@@ -37,6 +37,7 @@
         <a href="#methods">Methods</a>
         <a href="#data">Data</a>
         <a href="https://github.com/ItamarShmelo/ComptonMatrixExact" target="_blank" rel="noreferrer">ComptonMatrixExact</a>
+        <a href="https://github.com/eladtan/GLOW" target="_blank" rel="noreferrer">GLOW</a>
       </div>
 
       <button id="theme-toggle" class="icon-button" type="button" aria-label="Switch to light theme" title="Switch color theme">
@@ -189,12 +190,12 @@
                       <input type="number" id="n-groups" min="1" max="128" value="128">
                     </label>
                     <div class="plot-group-range">
-                      <span>Hint</span>
+                      <span>Valid range</span>
                       <strong id="n-groups-hint">&nbsp;</strong>
                     </div>
                   </div>
                   <div id="boundaries-auto" style="margin-top: .6rem;">
-                    <label>Coarse boundaries (keV)</label>
+                    <label>Coarse boundaries (eV)</label>
                     <div class="plot-group-range" style="margin-top: .3rem; max-height: 120px; overflow-y: auto;">
                       <strong id="boundaries-display" style="font-size: .62rem; word-break: break-all;">Loading&hellip;</strong>
                     </div>
@@ -356,9 +357,15 @@
               </label>
             </div>
 
-            <div id="plot-group-info" class="plot-group-range" style="margin-bottom: .6rem;">
-              <span>Selection</span>
-              <strong id="plot-selection-info">&mdash;</strong>
+            <div class="selection-boxes" style="margin-bottom: .6rem;">
+              <div id="plot-sel-left-box">
+                <span class="selection-label" id="plot-sel-left-label">Selected E</span>
+                <div class="plot-group-range"><strong id="plot-sel-left">&mdash;</strong></div>
+              </div>
+              <div id="plot-sel-right-box">
+                <span class="selection-label" id="plot-sel-right-label">Selected &#x03BE;</span>
+                <div class="plot-group-range"><strong id="plot-sel-right">&mdash;</strong></div>
+              </div>
             </div>
 
             <div id="plot-form-error" class="error" hidden></div>
@@ -366,10 +373,6 @@
               <button id="plot-button" type="button">
                 Draw plot
                 <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 18 9 12l4 3 7-9"></path></svg>
-              </button>
-              <button id="plot-download-button" type="button" class="secondary" disabled>
-                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v12M7 10l5 5 5-5M5 21h14"></path></svg>
-                Download CSV
               </button>
             </div>
           </form>
@@ -397,20 +400,12 @@
             </div>
             <p>Your requested plot will appear here.</p>
           </div>
-        </section>
-      </div>
-    </section>
 
-    <section id="plot-section" class="section-shell result-section" hidden>
-      <div class="instrument-card result-card">
-        <div class="section-heading">
-          <div>
-            <p class="panel-kicker">Visualization output</p>
-            <h2>Scattering matrix plot</h2>
-            <p id="plot-description"></p>
+          <div id="plot-section" hidden>
+            <p id="plot-description" class="plot-inline-desc"></p>
+            <div id="plot-chart" class="plot-chart" role="img" aria-label="Scattering matrix plot"></div>
           </div>
-        </div>
-        <div id="plot-chart" class="plot-chart" role="img" aria-label="Scattering matrix plot"></div>
+        </section>
       </div>
     </section>
 
@@ -516,6 +511,28 @@
         <div class="data-actions">
           <a class="button button-primary" href="#explore">Build a matrix</a>
           <a class="button button-ghost" href="https://github.com/ItamarShmelo/ComptonMatrixExact" target="_blank" rel="noreferrer">ComptonMatrixExact</a>
+          <a class="button button-ghost" href="https://github.com/eladtan/GLOW" target="_blank" rel="noreferrer">GLOW</a>
+        </div>
+      </div>
+
+      <div class="data-cta" style="margin-top: 2rem;">
+        <div>
+          <h3>ComptonMatrixExact</h3>
+          <p>
+            A standalone solver that evaluates the exact thermal Compton-scattering
+            kernel (Kershaw, Prasad &amp; Beason) for arbitrary energy grids, angle
+            discretizations, and electron temperatures. It produces the multigroup
+            cross-section matrices that MACE serves.
+          </p>
+        </div>
+        <div>
+          <h3>GLOW &mdash; Group-resolved Low-density Opacity Warehouse</h3>
+          <p>
+            A public library of multigroup opacities extending to low-density
+            astrophysical plasmas. GLOW provides group-resolved opacity inputs for
+            supernovae, tidal disruption events, accretion flows, stellar envelopes,
+            radiative shocks, and other radiation-hydrodynamics problems.
+          </p>
         </div>
       </div>
     </section>

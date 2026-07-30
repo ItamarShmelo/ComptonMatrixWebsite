@@ -1,4 +1,4 @@
-import { renderLinePlot, renderHeatmap, plotDataToCSV } from './plot.js';
+import { renderLinePlot, renderHeatmap } from './plot.js';
 
 /* ── State ─────────────────────────────────────────────── */
 
@@ -9,7 +9,7 @@ let fineBoundaries = null;
 let nFineGroups = 0;
 let nFineAngleBins = 0;
 let jszipLoaded = false;
-let lastPlotCSV = null;
+
 
 /* ── DOM refs ──────────────────────────────────────────── */
 
@@ -47,11 +47,16 @@ const plotPlaceholder = $("plot-placeholder");
 const plotModeSelect = $("plot-mode-select");
 const plotTempSelect = $("plot-temperature-select");
 const plotButton = $("plot-button");
-const plotDownloadButton = $("plot-download-button");
+
 const plotSection = $("plot-section");
 const plotChart = $("plot-chart");
 const plotDescription = $("plot-description");
-const plotSelectionInfo = $("plot-selection-info");
+const plotSelLeft = $("plot-sel-left");
+const plotSelRight = $("plot-sel-right");
+const plotSelLeftBox = $("plot-sel-left-box");
+const plotSelRightBox = $("plot-sel-right-box");
+const plotSelLeftLabel = $("plot-sel-left-label");
+const plotSelRightLabel = $("plot-sel-right-label");
 const plotFormError = $("plot-form-error");
 
 /* ── Mode helpers ──────────────────────────────────────── */
@@ -67,9 +72,12 @@ function isAngleCustom() { return getRadioValue("angle-mode") === "custom"; }
 
 /* ── Helpers ───────────────────────────────────────────── */
 
+function compactExp(v) {
+  return v.toExponential(2).replace(/e\+?0*(-?)0*(\d+)/, "e$1$2");
+}
+
 function formatTemp(t) {
-  const keV = t.temperature_K / 1.16045e7;
-  return `T${String(t._index).padStart(3, "0")}:  ${t.temperature_K.toExponential(3)} K  (${keV.toPrecision(4)} keV)`;
+  return compactExp(t.temperature_K * 8.617333262e-5) + " eV";
 }
 
 function pickLogSpacedBoundaries(fineBounds, nCoarse) {
@@ -207,7 +215,7 @@ function updateBoundariesDisplay() {
   if (!fineBoundaries || isEnergyCustom()) return;
   const bounds = getCurrentEnergyBoundaries();
   if (!bounds) return;
-  boundariesDisplay.textContent = bounds.map((v) => v.toExponential(3)).join("  ");
+  boundariesDisplay.innerHTML = bounds.map((v) => compactExp(v * 1e3) + " eV").join("<br>");
 }
 
 function updateSummary() {
@@ -249,7 +257,7 @@ function updateAngleHints() {
   if (!aInfo) return;
   const nA = aInfo.count || 1;
   nAnglesHint.textContent = `Any integer from 1 to ${nFineAngleBins}. Values above ${nFineAngleBins} exceed stored resolution.`;
-  angleInfo.textContent = `\u0394\u03BE = ${(2 / nA).toFixed(6)}`;
+  angleInfo.textContent = `\u0394\u03BE = ${compactExp(2 / nA)}`;
 }
 
 function parseCustomBoundaries() {
@@ -282,7 +290,7 @@ function parseCustomBoundaries() {
   const eMin = fineBoundaries[0];
   const eMax = fineBoundaries[fineBoundaries.length - 1];
   if (values[0] < eMin * (1 - 1e-6) || values[values.length - 1] > eMax * (1 + 1e-6)) {
-    customBoundariesError.textContent = `Boundaries must lie within [${eMin.toExponential(3)}, ${eMax.toExponential(3)}] keV.`;
+    customBoundariesError.textContent = `Boundaries must lie within [${compactExp(eMin * 1e3)}, ${compactExp(eMax * 1e3)}] eV.`;
     customBoundariesError.classList.add("error");
     return null;
   }
@@ -353,7 +361,7 @@ function wireDownloadEvents() {
       nGroupsHint.textContent = `Must be between 1 and ${nFineGroups}.`;
       nGroupsHint.classList.add("error");
     } else {
-      nGroupsHint.textContent = "\u00a0";
+      nGroupsHint.textContent = `1 \u2013 ${nFineGroups}`;
       nGroupsHint.classList.remove("error");
     }
     updateBoundariesDisplay();
@@ -721,7 +729,6 @@ function triggerDownload(blob, filename) {
 function wirePlotEvents() {
   plotModeSelect.addEventListener("change", updatePlotPanels);
   plotButton.addEventListener("click", handlePlot);
-  plotDownloadButton.addEventListener("click", handlePlotDownload);
 
   [$("plot-e-group"), $("plot-xi-bin"), $("plot-e-group-xi"),
    $("plot-ep-group-xi"), $("plot-xi-bin-matrix"), plotTempSelect,
@@ -748,36 +755,50 @@ function groupMidpoint(idx) {
   return Math.sqrt(fineBoundaries[idx] * fineBoundaries[idx + 1]);
 }
 
+function groupBoundsEV(idx) {
+  if (!fineBoundaries || idx < 0 || idx >= nFineGroups) return "?";
+  return `[${compactExp(fineBoundaries[idx] * 1e3)}, ${compactExp(fineBoundaries[idx + 1] * 1e3)}] eV`;
+}
+
 function angleBinMidpoint(idx) {
   if (idx < 0 || idx >= nFineAngleBins) return NaN;
   const w = 2 / nFineAngleBins;
   return -1 + (idx + 0.5) * w;
 }
 
+function angleBinBounds(idx) {
+  if (idx < 0 || idx >= nFineAngleBins) return "?";
+  const w = 2 / nFineAngleBins;
+  const lo = -1 + idx * w;
+  const hi = -1 + (idx + 1) * w;
+  return `[${compactExp(lo)}, ${compactExp(hi)}]`;
+}
+
 function updatePlotSelectionInfo() {
   if (!manifest) return;
   const mode = plotModeSelect.value;
-  let info = "";
   if (mode === "ep-profile") {
     const eIdx = parseInt($("plot-e-group").value);
     const xiIdx = parseInt($("plot-xi-bin").value);
-    const eMid = groupMidpoint(eIdx);
-    const xiMid = angleBinMidpoint(xiIdx);
-    info = `E = ${isNaN(eMid) ? "?" : eMid.toExponential(3)} keV (group ${eIdx}), ` +
-           `\u03BE = ${isNaN(xiMid) ? "?" : xiMid.toFixed(4)} (bin ${xiIdx})`;
+    plotSelLeftLabel.textContent = "Selected E";
+    plotSelLeft.textContent = groupBoundsEV(eIdx);
+    plotSelRightBox.hidden = false;
+    plotSelRightLabel.textContent = "Selected \u03BE";
+    plotSelRight.textContent = angleBinBounds(xiIdx);
   } else if (mode === "xi-profile") {
     const eIdx = parseInt($("plot-e-group-xi").value);
     const epIdx = parseInt($("plot-ep-group-xi").value);
-    const eMid = groupMidpoint(eIdx);
-    const epMid = groupMidpoint(epIdx);
-    info = `E = ${isNaN(eMid) ? "?" : eMid.toExponential(3)} keV (group ${eIdx}), ` +
-           `E\u2032 = ${isNaN(epMid) ? "?" : epMid.toExponential(3)} keV (group ${epIdx})`;
+    plotSelLeftLabel.textContent = "Selected E";
+    plotSelLeft.textContent = groupBoundsEV(eIdx);
+    plotSelRightBox.hidden = false;
+    plotSelRightLabel.textContent = "Selected E\u2032";
+    plotSelRight.textContent = groupBoundsEV(epIdx);
   } else {
     const xiIdx = parseInt($("plot-xi-bin-matrix").value);
-    const xiMid = angleBinMidpoint(xiIdx);
-    info = `\u03BE = ${isNaN(xiMid) ? "?" : xiMid.toFixed(4)} (bin ${xiIdx})`;
+    plotSelLeftLabel.textContent = "Selected \u03BE";
+    plotSelLeft.textContent = angleBinBounds(xiIdx);
+    plotSelRightBox.hidden = true;
   }
-  plotSelectionInfo.textContent = info;
 }
 
 const npzCache = new Map();
@@ -835,12 +856,11 @@ async function handlePlot() {
       }
       const logX = $("plot-log-x").checked;
       const logY = $("plot-log-y").checked;
-      const xLabel = "Outgoing energy E\u2032 [keV]";
+      const xLabel = "Outgoing energy E\u2032 [eV]";
       const yLabel = "\u03C3(E \u2192 E\u2032, \u03BE) [cm\u00B2]";
-      const title = `E\u2032 profile: E = ${groupMidpoint(eIdx).toExponential(3)} keV, \u03BE\u2248${angleBinMidpoint(xiIdx).toFixed(3)}, T = ${tempK.toExponential(3)} K`;
+      const title = `E\u2032 profile: E = ${compactExp(groupMidpoint(eIdx) * 1e3)} eV, \u03BE\u2248${angleBinMidpoint(xiIdx).toFixed(3)}, T = ${compactExp(tempK * 8.617333262e-5)} eV`;
       renderLinePlot(plotChart, xVals, yVals, { logX, logY, xLabel, yLabel, title });
       plotDescription.textContent = title;
-      lastPlotCSV = plotDataToCSV(xVals, yVals, "Ep_keV", "sigma_cm2");
     } else if (mode === "xi-profile") {
       const eIdx = parseInt($("plot-e-group-xi").value);
       const epIdx = parseInt($("plot-ep-group-xi").value);
@@ -858,10 +878,9 @@ async function handlePlot() {
       const logY = $("plot-log-y").checked;
       const xLabel = "\u03BE = cos \u03B8";
       const yLabel = "\u03C3(E \u2192 E\u2032, \u03BE) [cm\u00B2]";
-      const title = `\u03BE profile: E = ${groupMidpoint(eIdx).toExponential(3)} keV, E\u2032 = ${groupMidpoint(epIdx).toExponential(3)} keV, T = ${tempK.toExponential(3)} K`;
+      const title = `\u03BE profile: E = ${compactExp(groupMidpoint(eIdx) * 1e3)} eV, E\u2032 = ${compactExp(groupMidpoint(epIdx) * 1e3)} eV, T = ${compactExp(tempK * 8.617333262e-5)} eV`;
       renderLinePlot(plotChart, xVals, yVals, { logX, logY, xLabel, yLabel, title });
       plotDescription.textContent = title;
-      lastPlotCSV = plotDataToCSV(xVals, yVals, "xi_cos_theta", "sigma_cm2");
     } else {
       const xiIdx = parseInt($("plot-xi-bin-matrix").value);
       if (xiIdx < 0 || xiIdx >= nA) {
@@ -879,21 +898,19 @@ async function handlePlot() {
       }
       const xEdges = Array.from(fineBoundaries);
       const yEdges = Array.from(fineBoundaries);
-      const title = `E/E\u2032 matrix: \u03BE\u2248${angleBinMidpoint(xiIdx).toFixed(3)} (bin ${xiIdx}), T = ${tempK.toExponential(3)} K`;
+      const title = `E/E\u2032 matrix: \u03BE\u2248${angleBinMidpoint(xiIdx).toFixed(3)} (bin ${xiIdx}), T = ${compactExp(tempK * 8.617333262e-5)} eV`;
       renderHeatmap(plotChart, matrixData, xEdges, yEdges, {
-        xLabel: "Outgoing energy E\u2032 [keV]",
-        yLabel: "Incoming energy E [keV]",
+        xLabel: "Outgoing energy E\u2032 [eV]",
+        yLabel: "Incoming energy E [eV]",
         zLabel: "\u03C3 [cm\u00B2]",
         title
       });
       plotDescription.textContent = title;
-      lastPlotCSV = null;
     }
 
     plotSection.hidden = false;
     plotPlaceholder.hidden = true;
-    plotSection.scrollIntoView({ behavior: "smooth", block: "start" });
-    plotDownloadButton.disabled = (lastPlotCSV === null);
+    plotChart.scrollIntoView({ behavior: "smooth", block: "nearest" });
   } catch (err) {
     plotFormError.textContent = "Plot error: " + err.message;
     plotFormError.hidden = false;
@@ -903,11 +920,6 @@ async function handlePlot() {
   }
 }
 
-function handlePlotDownload() {
-  if (!lastPlotCSV) return;
-  const blob = new Blob([lastPlotCSV], { type: "text/csv" });
-  triggerDownload(blob, "mace_plot_data.csv");
-}
 
 /* ── Initialization ────────────────────────────────────── */
 
@@ -921,6 +933,7 @@ async function loadManifest() {
 
   nGroupsInput.max = nFineGroups;
   nGroupsInput.value = nFineGroups;
+  nGroupsHint.textContent = `1 \u2013 ${nFineGroups}`;
   nAnglesInput.max = nFineAngleBins;
   nAnglesInput.value = nFineAngleBins;
 
@@ -933,9 +946,9 @@ async function loadManifest() {
     return `${m}\\times10^{${parseInt(e, 10)}}`;
   }
   gridSummary.innerHTML =
-    `${nFineGroups} energy groups (\\(${texExp(fineBoundaries[0])}\\) \u2013 \\(${texExp(fineBoundaries[fineBoundaries.length - 1])}\\) keV, log-spaced)<br>` +
+    `${nFineGroups} energy groups (\\(${texExp(fineBoundaries[0] * 1e3)}\\) \u2013 \\(${texExp(fineBoundaries[fineBoundaries.length - 1] * 1e3)}\\) eV, log-spaced)<br>` +
     `${nFineAngleBins} angle bins (\\(\\xi = \\cos\\theta \\in [-1,\\,1]\\))<br>` +
-    `${manifest.temperatures.length} temperatures (\\(${texExp(tMin.temperature_K)}\\) \u2013 \\(${texExp(tMax.temperature_K)}\\) K, log-spaced)`;
+    `${manifest.temperatures.length} temperatures (\\(${texExp(tMin.temperature_K * 8.617333262e-5)}\\) \u2013 \\(${texExp(tMax.temperature_K * 8.617333262e-5)}\\) eV, log-spaced)`;
   if (window.renderMathInElement) renderMathInElement(gridSummary, { delimiters: [{ left: "$$", right: "$$", display: true }, { left: "\\(", right: "\\)", display: false }] });
 
   tempSelect.innerHTML = "";
