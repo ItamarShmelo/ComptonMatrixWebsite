@@ -15,6 +15,7 @@ let jszipLoaded = false;
 
 const $ = (id) => document.getElementById(id);
 const loadingMsg = $("loading-message");
+const pyodideLoading = $("pyodide-loading");
 const downloadForm = $("download-form");
 const gridSummary = $("grid-summary");
 const tempSelect = $("temperature-select");
@@ -430,14 +431,14 @@ function buildCollapseToArrayCall(energyBounds, angleInfo) {
   const anglePyArg = angleInfo.boundaries
     ? `angle_boundaries=[${angleInfo.boundaries.join(",")}]`
     : `n_angle_bins=${angleInfo.count}`;
-  return `_collapse_to_array(\n    open("/tmp/input.npz", "rb").read(),\n    [${energyBounds.join(",")}],\n    ${anglePyArg},\n)`;
+  return `_collapse_to_array(\n    open("/tmp/input.npz", "rb").read(),\n    [${energyBounds.join(",")}],\n    ${anglePyArg},\n).ravel()`;
 }
 
 function buildCollapseInterpCall(energyBounds, angleInfo, T_lo, T_hi, T_target) {
   const anglePyArg = angleInfo.boundaries
     ? `angle_boundaries=[${angleInfo.boundaries.join(",")}]`
     : `n_angle_bins=${angleInfo.count}`;
-  return `collapse_interp(\n    open("/tmp/input_lo.npz", "rb").read(),\n    open("/tmp/input_hi.npz", "rb").read(),\n    ${T_lo}, ${T_hi}, ${T_target},\n    [${energyBounds.join(",")}],\n    ${anglePyArg},\n)`;
+  return `collapse_interp(\n    open("/tmp/input_lo.npz", "rb").read(),\n    open("/tmp/input_hi.npz", "rb").read(),\n    ${T_lo}, ${T_hi}, ${T_target},\n    [${energyBounds.join(",")}],\n    ${anglePyArg},\n).ravel()`;
 }
 
 function isIdentityGrid(energyBounds, angleInfo) {
@@ -747,6 +748,7 @@ function updatePlotPanels() {
   $("plot-params-xi").hidden = mode !== "xi-profile";
   $("plot-params-matrix").hidden = mode !== "matrix";
   $("plot-scale-switches").hidden = mode === "matrix";
+  $("plot-log-x").parentElement.hidden = mode === "xi-profile";
   updatePlotSelectionInfo();
 }
 
@@ -856,7 +858,7 @@ async function handlePlot() {
       }
       const logX = $("plot-log-x").checked;
       const logY = $("plot-log-y").checked;
-      const xLabel = "Outgoing energy E\u2032 [eV]";
+      const xLabel = "Outgoing energy E\u2032 [keV]";
       const yLabel = "\u03C3(E \u2192 E\u2032, \u03BE) [cm\u00B2]";
       const title = `E\u2032 profile: E = ${compactExp(groupMidpoint(eIdx) * 1e3)} eV, \u03BE\u2248${angleBinMidpoint(xiIdx).toFixed(3)}, T = ${compactExp(tempK * 8.617333262e-5)} eV`;
       renderLinePlot(plotChart, xVals, yVals, { logX, logY, xLabel, yLabel, title });
@@ -900,8 +902,8 @@ async function handlePlot() {
       const yEdges = Array.from(fineBoundaries);
       const title = `E/E\u2032 matrix: \u03BE\u2248${angleBinMidpoint(xiIdx).toFixed(3)} (bin ${xiIdx}), T = ${compactExp(tempK * 8.617333262e-5)} eV`;
       renderHeatmap(plotChart, matrixData, xEdges, yEdges, {
-        xLabel: "Outgoing energy E\u2032 [eV]",
-        yLabel: "Incoming energy E [eV]",
+        xLabel: "Outgoing energy E\u2032 [keV]",
+        yLabel: "Incoming energy E [keV]",
         zLabel: "\u03C3 [cm\u00B2]",
         title
       });
@@ -924,8 +926,17 @@ async function handlePlot() {
 /* ── Initialization ────────────────────────────────────── */
 
 async function loadManifest() {
-  const resp = await fetch("data/uniform/manifest.json");
-  manifest = await resp.json();
+  try {
+    const resp = await fetch("data/uniform/manifest.json");
+    if (!resp.ok) throw new Error(`HTTP ${resp.status}: ${resp.statusText}`);
+    manifest = await resp.json();
+  } catch (err) {
+    loadingMsg.textContent = "Failed to load dataset metadata: " + err.message;
+    loadingMsg.classList.remove("status");
+    loadingMsg.classList.add("error");
+    console.error(err);
+    return;
+  }
 
   fineBoundaries = new Float64Array(manifest.boundaries_keV);
   nFineGroups = manifest.n_groups;
@@ -988,7 +999,7 @@ async function loadManifest() {
 }
 
 async function loadPyodide_() {
-  loadingMsg.textContent = "Loading Python runtime\u2026";
+  pyodideLoading.hidden = false;
   const pyodideModule = await loadPyodide({
     indexURL: "https://cdn.jsdelivr.net/pyodide/v0.27.6/full/",
   });
@@ -999,6 +1010,7 @@ async function loadPyodide_() {
   await pyodideModule.runPythonAsync(collapseCode);
 
   pyodide = pyodideModule;
+  pyodideLoading.hidden = true;
   loadingMsg.hidden = true;
   downloadForm.hidden = false;
   updateButtonStates();
@@ -1014,7 +1026,11 @@ async function init() {
   pyodideScript.src = "https://cdn.jsdelivr.net/pyodide/v0.27.6/full/pyodide.js";
   pyodideScript.addEventListener("load", () => {
     loadPyodide_().catch((err) => {
+      pyodideLoading.hidden = true;
       loadingMsg.textContent = "Failed to load Python runtime: " + err.message;
+      loadingMsg.hidden = false;
+      loadingMsg.classList.remove("status");
+      loadingMsg.classList.add("error");
       console.error(err);
     });
   });

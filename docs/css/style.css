@@ -605,6 +605,8 @@ html[data-theme="light"] code { color: #6135b7; }
 .heatmap-cell:hover { stroke: var(--text); stroke-width: 1; }
 .colorbar-label { fill: var(--muted); font-size: 11px; }
 .colorbar-title { fill: var(--text-soft); font-size: 12px; font-weight: 650; }
+.colorbar-border { stroke: var(--border-strong); stroke-width: 1; }
+.colorbar-tick { stroke: var(--text-soft); stroke-width: 1; }
 
 .methods-section { padding-top: 7rem; }
 .calculation-provenance {

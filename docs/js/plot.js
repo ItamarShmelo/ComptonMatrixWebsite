@@ -305,13 +305,13 @@ export function renderHeatmap(container, matrix, xEdges, yEdges, options = {}) {
   for (const t of xTicks) {
     const x = px(t);
     if (x < margin.left || x > width - margin.right) continue;
-    svg.appendChild(el("line", { x1: x, y1: margin.top, x2: x, y2: height - margin.bottom, stroke: "rgba(255,255,255,0.12)", "stroke-width": 0.5 }));
+    svg.appendChild(el("line", { x1: x, y1: margin.top, x2: x, y2: height - margin.bottom, class: "plot-grid-line", "stroke-width": 0.5 }));
     svg.appendChild(el("text", { x, y: height - margin.bottom + 18, "text-anchor": "middle", class: "plot-tick-label" }, formatTickLabel(t, true)));
   }
   for (const t of yTicks) {
     const y = py(t);
     if (y < margin.top || y > height - margin.bottom) continue;
-    svg.appendChild(el("line", { x1: margin.left, y1: y, x2: width - margin.right, y2: y, stroke: "rgba(255,255,255,0.12)", "stroke-width": 0.5 }));
+    svg.appendChild(el("line", { x1: margin.left, y1: y, x2: width - margin.right, y2: y, class: "plot-grid-line", "stroke-width": 0.5 }));
     svg.appendChild(el("text", { x: margin.left - 10, y: y + 4, "text-anchor": "end", class: "plot-tick-label" }, formatTickLabel(t, true)));
   }
 
@@ -353,7 +353,7 @@ export function renderHeatmap(container, matrix, xEdges, yEdges, options = {}) {
 
   svg.appendChild(el("rect", {
     x: cbX, y: margin.top, width: cbW, height: cbH,
-    fill: "none", stroke: "rgba(255,255,255,0.2)", "stroke-width": 1
+    fill: "none", class: "colorbar-border"
   }));
 
   const cbTicks = logTicks(zMin, zMax, 6);
@@ -363,7 +363,7 @@ export function renderHeatmap(container, matrix, xEdges, yEdges, options = {}) {
     if (y < margin.top || y > margin.top + cbH) continue;
     svg.appendChild(el("line", {
       x1: cbX + cbW, y1: y, x2: cbX + cbW + 4, y2: y,
-      stroke: "rgba(255,255,255,0.5)", "stroke-width": 1
+      class: "colorbar-tick"
     }));
     svg.appendChild(el("text", {
       x: cbX + cbW + 7, y: y + 3.5,
